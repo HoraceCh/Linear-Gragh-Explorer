@@ -1,37 +1,28 @@
-# Verification — 2026-11-17
+# Verification
 
-## Verified locally
+## Passed
 
-- 17 automated tests: Blocks direction/completion, relation semantics, SCC cycles, cross-team exclusion, missing references, deduplication, empty projects, 10,000-node chain, pagination/repeated cursor, denied access, atomic failure, PKCE read scope/S256/user actor, state mismatch, expiry, rejection of broad scopes, in-memory token lifecycle.
-- TypeScript check and production Vite build.
-- Browser QA: first visit, synthetic overview, dependency view, text search, details, focus expansion, dark theme. Found/fixed detail dismissal clearing focus. Full mobile hardware/touch QA and 10,000-node visual layout remain unverified; large-chain test covers model analysis, not visual performance.
-- Live Linear API schema introspection checked Project/Team/Issue relation arguments. Corrected project query to `team(id).projects(includeSubTeams:false)` rather than unsupported `ProjectFilter.teams`.
-- Live OPTIONS preflight for GraphQL and OAuth token endpoint returned HTTP 204 with matching Sites origin and requested headers allowed. This was a network preflight, **not** an authenticated browser flow.
-- Unauthenticated read requests are denied with AUTHENTICATION_ERROR. No mutation was sent.
-- Desktop synthetic data was used for screenshots/QA; no real tasks embedded into source or build.
+- 18 automated tests covering dependency direction, completion semantics, cycles, scope exclusion, unknown references, deduplication, empty projects, pagination, rejected access, atomic failures and a 10,000-node analysis chain.
+- OAuth tests cover PKCE S256, read-only scope, state validation, transaction expiry, scope rejection, in-memory credential lifecycle, concurrent renewal and refresh-token rotation.
+- TypeScript and production build passed locally and in hosted CI run #3.
+- Private browser acceptance confirmed authorization-code exchange, runtime-scoped synchronization, repeated data refresh and two successive real-provider token renewals followed by successful data synchronization.
+- Private comparison checked aggregate totals, assignment totals, parent links and representative incoming/outgoing dependency directions against an independent source.
+- Synthetic browser QA covered overview, search, task details, dependency layout, focus expansion and dark theme.
 
-## Pending production acceptance — do not mark complete
+No private task contents, account identifiers, workspace identifiers, OAuth application metadata, token values or private screenshots are included in this report.
 
-1. **Passed:** workspace-private OAuth registration, owner Site login, real-user read-only PKCE callback and token exchange, live task synchronization and a second successful data refresh.
-2. Validate rotating refresh with real provider response and expiry; revoked/expired token behavior; cancellation during sync.
-3. **Partially passed:** project/issue/milestone totals and assignment totals match an independent private connector baseline. Verified incoming and outgoing Blocks for a representative task and all three parent-child links. Private task values and snapshots are deliberately excluded from this source repository. Exhaustive relation-set and milestone-membership comparison remains pending.
-4. Login as a user without PVCR access and verify no tasks are rendered or cached. OAuth read scope may cover the user's broader account, but the application's requests must remain Team constrained.
-5. Validate 429 recovery, offline refresh and partial-error UX in production (unit coverage is not a provider fault injection).
-6. **Passed:** sanitized source uploaded to Public GitHub repository. Hosted CI run #1 passed npm ci, all 17 tests and production build. Source excludes the private hosting manifest, fixed private Team UUID, task snapshots and credentials.
-7. Only after all above: Pages publish and repeat origin/callback/access tests.
+## Still pending
 
-## Security findings and limitations
+- A real account without permission to the selected team.
+- Natural token expiry, revocation and cancellation during renewal.
+- Exhaustive relation-set and milestone-membership comparison.
+- Production fault injection for rate limits, offline refresh and partial failures.
+- Full mobile touch QA and large-graph visual performance; the 10,000-node automated test covers analysis, not rendering.
+- Deployment cache consistency: rapid deployment changes briefly showed an older HTML entry; a fresh versioned navigation loaded the current shell. Keep this open for migration acceptance.
+- Static-host migration and callback-origin acceptance. The manual deployment workflow has not been run.
 
-No shared high-privilege credentials, persistent bearer token storage, Linear writes or conversation-cache runtime data are used. Foreign endpoint metadata is never dereferenced. Missing/invisible records cannot reliably be distinguished as deleted vs inaccessible, so the UI reports uncertainty rather than fabricating a deletion status.
+## Boundaries
 
-Direct PKCE exchange and live GraphQL passed in the authenticated browser. Rotating token renewal and negative-account acceptance remain provisional. If token/CORS compatibility fails, the server adapter contingency must be implemented and reviewed before migration. Sites is owner-private; a future Pages shell would be public, while API data still requires the user's own Linear authorization.
+The application requests only read access and performs no task mutations. Tokens stay in memory. Foreign endpoints are not expanded. Missing references are reported as unknown rather than assumed deleted. No critical-path claim is made without duration data.
 
-Linear settings and GitHub browser sign-in are now available. No claim of full security acceptance is made. No additional account with denied PVCR access is available for the negative-account test.
-
-## OAuth registration update
-
-Created workspace-private OAuth application **PVCR Graph Explorer** in Baukasten Park. Public Client ID is configured as the SPA default. Public availability, client-credentials grants and webhooks are disabled. No secret or developer token was read or used. Production Site sign-in, real-user OAuth exchange and two full task-data syncs passed. Token rotation and expiry are not yet verified with the real provider.
-
-## Runtime scope recheck
-
-The public core now resolves a unique PVCR Team by a filtered key query in the authorized workspace. Every subsequent issue is checked against the returned UUID. Private production browser reauthorization and full synchronization passed after this change. The OAuth app remains private to its owning workspace. Internal hosting metadata stays in the private Sites checkout and is not part of the public source tree.
+The provider's read grant is broader than the application's selected-team query scope. Server-side provider permissions remain authoritative; application filtering is an additional boundary, not a replacement for authorization. Passing automated tests does not constitute full security acceptance.
