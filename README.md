@@ -4,7 +4,7 @@ Private, read-only task graph explorer for **PV Cleaning Robotics (PVCR)**. Reac
 
 ## Status
 
-MVP implemented; real-user PKCE callback, token exchange, live synchronization and repeated refresh of task data have passed browser verification. Rotating token renewal and a real denied-access account remain pending. The Sites deployment is owner-private. The optional demo is entirely synthetic. No real private tasks, tokens or client secrets are included in this repository. Source repository: https://github.com/HoraceCh/Linear-Gragh-Explorer. GitHub Pages is gated behind manual acceptance and is not enabled automatically.
+MVP implemented; real-user PKCE callback, token exchange, live synchronization and repeated refresh of task data have passed browser verification. Two successive real-provider token renewals and subsequent data syncs passed. A real denied-access account remains pending. The Sites deployment is owner-private. The optional demo is entirely synthetic. No real private tasks, tokens or client secrets are included in this repository. Source repository: https://github.com/HoraceCh/Linear-Gragh-Explorer. GitHub Pages is gated behind manual acceptance and is not enabled automatically.
 
 ## Run
 
