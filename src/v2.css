@@ -1,0 +1,440 @@
+.v2-app .sidebar {
+  overflow-y: auto;
+}
+.team-selector {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 0 4px 22px;
+}
+.team-selector select {
+  display: block;
+  width: 100%;
+  max-width: none;
+  margin-top: 9px;
+  font-size: 12px;
+  min-height: 40px;
+}
+.v2-app .content {
+  padding: 25px 26px 0;
+}
+.v2-app .page-heading {
+  margin-bottom: 22px;
+}
+.v2-app .v2-welcome {
+  display: block;
+}
+.v2-app .graph-node {
+  width: 280px;
+  min-height: 164px;
+  height: 164px;
+  padding: 15px 17px;
+}
+.v2-app .graph-node strong {
+  font-size: 14px;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.node-review {
+  display: block;
+  color: var(--accent);
+  margin-top: 9px;
+  font-size: 10px;
+}
+.graph-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 12px 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.graph-actions label,
+.filter-bar label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+}
+.graph-actions > span:first-child {
+  margin-right: auto;
+}
+.graph-legend {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 10px;
+  color: var(--muted);
+  padding: 12px 4px;
+}
+.v2-graph {
+  height: calc(100vh - 355px);
+  min-height: 460px;
+}
+.v2-graph .react-flow__minimap {
+  width: 180px;
+  height: 110px;
+  bottom: 16px;
+  right: 12px;
+  background: none !important;
+}
+.v2-graph .react-flow__attribution {
+  margin: 6px 8px;
+  max-width: 110px;
+}
+.react-flow__node-group {
+  padding: 14px 20px;
+  color: var(--accent);
+  font-size: 13px;
+}
+.tree-project {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 15px;
+  margin: 15px 0;
+  background: var(--panel);
+}
+.tree-project > button,
+.tree-milestone > button {
+  border: 0;
+  background: none;
+  text-align: left;
+  padding: 10px;
+  line-height: 1.7;
+}
+.tree-milestone {
+  margin: 10px 0 10px 15px;
+  border-left: 2px solid var(--border);
+  padding-left: 12px;
+}
+.tree-issue {
+  margin: 8px 0 8px 16px;
+  border-left: 1px solid var(--border);
+  padding-left: 8px;
+}
+.tree-issue > div {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+}
+.tree-issue button {
+  border: 0;
+  border-radius: 6px;
+  padding: 8px;
+}
+.tree-title {
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.8;
+  flex: 1;
+}
+.tree-title small {
+  color: var(--accent);
+  margin-right: 8px;
+}
+.tree-title span {
+  color: var(--muted);
+  font-size: 10px;
+  margin-left: 8px;
+}
+.hierarchy p {
+  color: var(--muted);
+  font-size: 11px;
+}
+.profile-modal {
+  width: min(760px, 95vw);
+}
+.settings-row {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.settings-row input {
+  min-width: 120px;
+  width: 55%;
+  padding: 8px;
+  color: var(--text);
+  background: var(--bg);
+  border-radius: 6px;
+}
+.settings-row select {
+  min-width: 180px;
+}
+.field select {
+  display: block;
+  margin-top: 10px;
+  min-width: 220px;
+  min-height: 90px;
+}
+.settings-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+.review-badge {
+  display: inline-flex;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 10px;
+  background: var(--accent-bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.review-review-passed {
+  color: #3a9877;
+  background: #439d7a18;
+}
+.review-changes-requested {
+  color: #cf705f;
+  background: #cf705f15;
+}
+.review-on-hold,
+.review-verification-required {
+  color: #b38c38;
+  background: #b38c3815;
+}
+.review-partially-approved {
+  color: var(--accent);
+}
+.task-list {
+  display: grid;
+  gap: 10px;
+}
+.task-row {
+  padding: 16px;
+  border-radius: 9px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  text-align: left;
+}
+.task-row strong,
+.task-row small {
+  display: block;
+}
+.task-row strong {
+  font-size: 13px;
+  margin-top: 8px;
+}
+.task-row small {
+  font-size: 10px;
+  color: var(--muted);
+}
+.v2-detail {
+  position: fixed;
+  width: 360px;
+  top: 72px;
+  right: 0;
+  z-index: 25;
+}
+.v2-app:has(.v2-detail) main {
+  width: calc(100% - 604px);
+  margin-right: 360px;
+}
+.v2-detail p {
+  font-size: 11px;
+  line-height: 1.9;
+}
+.review-decision {
+  border: 1px solid var(--border);
+  padding: 12px;
+  border-radius: 8px;
+  margin: 12px 0;
+}
+.review-decision b {
+  font-size: 11px;
+}
+.review-decision small {
+  display: block;
+  font-size: 10px;
+  margin-top: 7px;
+  color: var(--muted);
+}
+.review-decision p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.section-title {
+  font-size: 16px;
+  margin: 30px 0 18px;
+}
+.distribution {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.distribution span {
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px;
+}
+.distribution b {
+  margin-left: 8px;
+}
+.milestone-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 0;
+  font-size: 11px;
+}
+.milestone-row b {
+  color: var(--accent);
+}
+.v2-app .workload > div {
+  align-items: flex-start;
+  line-height: 1.8;
+}
+.v2-app .workload b {
+  font-size: 10px;
+}
+.v2-app .profile-modal h3 {
+  font-size: 15px;
+  border-top: 1px solid var(--border);
+  padding-top: 22px;
+  margin-top: 25px;
+}
+.v2-app select {
+  max-width: 200px;
+}
+.v2-app .team-selector select {
+  max-width: none;
+}
+.v2-app input[type="number"] {
+  max-width: 130px;
+}
+.v2-app input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+@media (max-width: 1100px) {
+  .v2-app:has(.v2-detail) main {
+    width: calc(100% - 205px);
+    margin-right: 0;
+  }
+  .v2-detail {
+    box-shadow: -20px 0 50px #0002;
+  }
+  .v2-app .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .v2-app .team-selector {
+    display: block;
+    padding: 0 8px 12px;
+    font-size: 10px;
+  }
+  .v2-app .sidebar {
+    width: 100%;
+    height: 126px;
+    bottom: auto;
+    padding: 10px;
+    z-index: 15;
+    border-bottom: 1px solid var(--border);
+    overflow: visible;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .v2-app .brand {
+    padding: 0;
+    gap: 7px;
+  }
+  .v2-app .brand > div:last-child {
+    display: block;
+  }
+  .v2-app .brand b {
+    font-size: 12px;
+  }
+  .v2-app .brand small {
+    font-size: 8px;
+  }
+  .v2-app .team-selector select {
+    font-size: 11px;
+    min-height: 33px;
+    margin-top: 4px;
+  }
+  .v2-app nav {
+    grid-column: 1/-1;
+    display: flex;
+    justify-content: space-between;
+    gap: 5px;
+  }
+  .v2-app nav button {
+    padding: 10px;
+    width: 40px;
+  }
+  .v2-app .project-nav,
+  .v2-app .sidebar-foot {
+    display: none;
+  }
+  .v2-app main,
+  .v2-app:has(.v2-detail) main {
+    margin: 126px 0 0;
+    width: 100%;
+  }
+  .v2-app header {
+    padding: 0 12px;
+    height: 60px;
+  }
+  .v2-app .content {
+    padding: 20px 14px 0;
+  }
+  .v2-graph {
+    min-height: 440px;
+    height: 60vh;
+  }
+  .v2-graph .react-flow__minimap {
+    display: block;
+    width: 140px !important;
+    height: 90px !important;
+  }
+  .graph-legend {
+    font-size: 9px;
+    gap: 10px;
+  }
+  .v2-detail {
+    top: 126px;
+    bottom: 0;
+    width: 100%;
+    height: auto;
+  }
+  .v2-app .task-row {
+    gap: 10px;
+    padding: 13px;
+  }
+  .task-row strong {
+    font-size: 12px;
+  }
+  .settings-row {
+    gap: 8px;
+  }
+  .settings-row select {
+    min-width: 140px;
+  }
+  .tree-issue {
+    margin-left: 5px;
+  }
+  .tree-milestone {
+    margin-left: 0;
+  }
+  .v2-app .profile-modal {
+    padding: 22px;
+  }
+}

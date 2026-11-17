@@ -1,11 +1,11 @@
-import { normalize, TEAM_KEY, type Item, type Link } from "./model";
+import { normalize, type Item, type Link } from "./model";
 export function demoGraph() {
   const items: Item[] = [
     {
       id: "demo-project",
       kind: "project",
       title: "示例 · 清洁机器人概念研究",
-      description: "完全合成的数据，用于体验图谱交互；不代表真实 PVCR 任务。",
+      description: "完全合成的数据，用于体验图谱交互；不代表真实团队 任务。",
     },
     { id: "demo-empty", kind: "project", title: "示例 · 空项目" },
   ];
@@ -39,7 +39,7 @@ export function demoGraph() {
     items.push({
       id: `i${i}`,
       kind: "issue",
-      teamId: TEAM_KEY,
+      teamId: "synthetic-team",
       identifier: `DEMO-${i + 1}`,
       title,
       description:
@@ -71,5 +71,8 @@ export function demoGraph() {
     kind: "blocks",
   }));
   links.push({ id: "related", source: "i3", target: "i4", kind: "related" });
-  return { ...normalize(items, links), source: "synthetic" as const };
+  return {
+    ...normalize(items, links, [], "synthetic-team"),
+    source: "synthetic" as const,
+  };
 }

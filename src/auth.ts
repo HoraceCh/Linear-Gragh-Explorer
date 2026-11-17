@@ -4,7 +4,9 @@ let credentials: {
   access_token: string;
   refresh_token: string;
   expiresAt: number;
+  clientId: string;
 } | null = null;
+let authGeneration = 0;
 let refreshing: Promise<string> | null = null;
 const encode = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes))
@@ -15,7 +17,7 @@ const random = () => encode(crypto.getRandomValues(new Uint8Array(32)));
 export const configuredClient = () =>
   localStorage.getItem("pvcr-client-id") ||
   (import.meta as any).env.VITE_LINEAR_CLIENT_ID ||
-  "0a9b769e6c0b069413e6d61021734b81";
+  "";
 export const callbackUrl = () => location.origin + location.pathname;
 export async function login(clientId: string) {
   if (!clientId.trim()) throw new Error("请先配置公开 OAuth Client ID。");
@@ -53,6 +55,7 @@ export async function login(clientId: string) {
   );
 }
 async function exchange(params: Record<string, string>) {
+  const generation = authGeneration;
   const r = await fetch(TOKEN, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -71,7 +74,10 @@ async function exchange(params: Record<string, string>) {
     !scopes.includes("read")
   )
     throw new Error("授权范围异常：仅接受 read。");
+  if (generation !== authGeneration)
+    throw new DOMException("Authorization canceled", "AbortError");
   credentials = {
+    clientId: params.client_id,
     access_token: t.access_token,
     refresh_token: t.refresh_token,
     expiresAt: Date.now() + t.expires_in * 1000,
@@ -106,22 +112,27 @@ export async function accessToken() {
   if (!credentials) throw new Error("请连接 Linear。页面重载后需要重新授权。");
   if (credentials.expiresAt > Date.now() + 60000)
     return credentials.access_token;
-  if (!refreshing)
-    refreshing = exchange({
+  if (!refreshing) {
+    const generation = authGeneration;
+    const pending = exchange({
       grant_type: "refresh_token",
-      client_id: configuredClient(),
+      client_id: credentials.clientId,
       refresh_token: credentials.refresh_token,
     })
       .catch((e) => {
-        credentials = null;
+        if (generation === authGeneration) credentials = null;
         throw e;
       })
       .finally(() => {
-        refreshing = null;
+        if (refreshing === pending) refreshing = null;
       });
+    refreshing = pending;
+  }
   return refreshing;
 }
 export function disconnect() {
+  authGeneration++;
+  refreshing = null;
   credentials = null;
   sessionStorage.removeItem("pvcr-oauth");
 }

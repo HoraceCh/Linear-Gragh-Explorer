@@ -1,20 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  Handle,
-  Position,
-  MarkerType,
-  type Node,
-  type Edge,
-  type NodeProps,
-} from "@xyflow/react";
-import ELK from "elkjs/lib/elk-api";
-import ElkWorker from "elkjs/lib/elk-worker.min.js?worker";
-import {
   Waypoints,
   LayoutDashboard,
   FolderOpen,
@@ -22,31 +8,19 @@ import {
   Network,
   Scan,
   Layers,
-  Search,
   Sun,
   Moon,
   RefreshCw,
-  ArrowUpRight,
   ShieldCheck,
-  ChevronRight,
-  X,
   SlidersHorizontal,
-  LogOut,
-  Link2,
-  AlertTriangle,
-  Maximize2,
+  CheckCheck,
 } from "lucide-react";
 import "@xyflow/react/dist/style.css";
 import "./style.css";
-import {
-  analyze,
-  emptyGraph,
-  neighborhood,
-  type Graph,
-  type Item,
-} from "./model";
+import "./v2.css";
+import { analyze, emptyGraph, type Graph, type Item } from "./model";
 import { demoGraph } from "./demo";
-import { syncGraph } from "./api";
+import { syncGraph, discoverTeams, boundedMap } from "./api";
 import {
   configuredClient,
   login,
@@ -55,7 +29,27 @@ import {
   renewSession,
   callbackUrl,
 } from "./auth";
-const elk = new ELK({ workerFactory: () => new ElkWorker() });
+import type { TeamContext } from "./team/types";
+import { TeamSession } from "./team/session";
+import {
+  loadProfile,
+  saveProfile,
+  defaultProfile,
+  type TeamProfile,
+} from "./profiles/model";
+import { ReviewCache } from "./review/api";
+import {
+  calculateReview,
+  reviewLabels,
+  type ReviewResult,
+  type ReviewStatus,
+} from "./review/engine";
+import { GraphView } from "./graph/GraphView";
+import { defaultVisibility, type GraphMode } from "./graph/semantics";
+import { Hierarchy } from "./views/Hierarchy";
+import { ProfileEditor } from "./components/ProfileEditor";
+import { ReviewBadge } from "./components/ReviewBadge";
+import { summarize, isActive, dependencyImpact } from "./analytics";
 const modes = [
   ["overview", "团队总览", LayoutDashboard],
   ["project", "项目探索", FolderOpen],
@@ -63,85 +57,121 @@ const modes = [
   ["dependency", "依赖视图", Network],
   ["focus", "聚焦模式", Scan],
   ["combined", "组合视图", Layers],
+  ["reviews", "审阅队列", CheckCheck],
 ] as const;
 type Mode = (typeof modes)[number][0];
-function CardNode({ data, selected }: NodeProps) {
-  const n = data.item as Item;
-  return (
-    <div className={`graph-node ${n.kind} ${selected ? "selected" : ""}`}>
-      <Handle type="target" position={Position.Left} />
-      <div className="node-top">
-        <span>{n.kind === "issue" ? n.identifier : n.kind.toUpperCase()}</span>
-        <span className={`dot ${n.statusType || ""}`} />
-      </div>
-      <strong>{n.title}</strong>
-      <div className="node-bottom">
-        <span>
-          {n.kind === "issue"
-            ? n.assignee || "未分配"
-            : n.kind === "project"
-              ? "项目"
-              : "里程碑"}
-        </span>
-        <span>{n.archived ? "已归档" : n.status || "归属分组"}</span>
-      </div>
-      <Handle type="source" position={Position.Right} />
-    </div>
-  );
-}
-const nodeTypes = { card: CardNode };
+const initialFilters = {
+  project: "all",
+  milestone: "all",
+  assignee: "all",
+  role: "all",
+  status: "all",
+  workstream: "all",
+  priority: "all",
+  review: "all",
+  reviewer: "all",
+};
 function App() {
   const [graph, setGraph] = useState<Graph>(emptyGraph),
-    [mode, setMode] = useState<Mode>("overview"),
-    [project, setProject] = useState("all"),
-    [selected, setSelected] = useState<Item | null>(null),
-    [query, setQuery] = useState(""),
-    [assignee, setAssignee] = useState("all"),
-    [status, setStatus] = useState("all"),
-    [archived, setArchived] = useState(false),
-    [dark, setDark] = useState(localStorage.getItem("pvcr-theme") === "dark"),
-    [settings, setSettings] = useState(false),
-    [client, setClient] = useState(configuredClient),
-    [error, setError] = useState(""),
+    [teams, setTeams] = useState<TeamContext[]>([]),
+    [team, setTeam] = useState<TeamContext | null>(null),
+    [connected, setConnected] = useState(false),
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState(""),
-    [connected, setConnected] = useState(false),
+    [error, setError] = useState(""),
+    [mode, setMode] = useState<Mode>("overview"),
+    [selected, setSelected] = useState<Item | null>(null),
+    [detail, setDetail] = useState(false),
+    [settings, setSettings] = useState(false),
+    [profiles, setProfiles] = useState(false),
+    [client, setClient] = useState(configuredClient),
+    [dark, setDark] = useState(localStorage.getItem("lge-theme") === "dark"),
+    [profile, setProfile] = useState<TeamProfile>(defaultProfile("", "")),
+    [reviews, setReviews] = useState<Record<string, ReviewResult>>({}),
+    [reviewBusy, setReviewBusy] = useState(false),
+    [reviewError, setReviewError] = useState(""),
+    [filter, setFilter] = useState(initialFilters),
+    [query, setQuery] = useState(""),
+    [archived, setArchived] = useState(false),
+    [completed, setCompleted] = useState(true),
+    [visibility, setVisibility] = useState(defaultVisibility),
     [depth, setDepth] = useState(1),
-    [direction, setDirection] = useState<"both" | "up" | "down">("both"),
-    [collapsed, setCollapsed] = useState<Set<string>>(new Set()),
-    [layoutKey, setLayoutKey] = useState(0),
-    [nodes, setNodes] = useState<Node[]>([]),
-    [edges, setEdges] = useState<Edge[]>([]),
-    [layoutBusy, setLayoutBusy] = useState(false);
-  const abort = useRef<AbortController | null>(null);
-  const graphRef = useRef(graph);
-  graphRef.current = graph;
-  const [detailOpen, setDetailOpen] = useState(true);
-  const [gone, setGone] = useState(0);
-  const diagnostics = useMemo(() => analyze(graph), [graph]);
-  const projects = graph.items.filter((n) => n.kind === "project"),
-    issues = graph.items.filter((n) => n.kind === "issue");
-  const load = async () => {
-    abort.current?.abort();
-    const controller = new AbortController();
-    abort.current = controller;
+    [direction, setDirection] = useState<"both" | "up" | "down">("both");
+  const session = useRef(new TeamSession()),
+    reviewAbort = useRef(new AbortController()),
+    cache = useRef(new ReviewCache()),
+    teamRef = useRef<TeamContext | null>(null),
+    generation = useRef(0),
+    reviewGen = useRef(0);
+  const discoveryAbort = useRef(new AbortController());
+  const clearReviews = (clearData = true) => {
+    reviewAbort.current.abort();
+    reviewAbort.current = new AbortController();
+    cache.current.clear();
+    reviewGen.current++;
+    setReviewBusy(false);
+    if (clearData) setReviews({});
+    setReviewError("");
+  };
+  const load = async (next: TeamContext, switching = false) => {
+    const guard = session.current.switch();
+    const epoch = ++generation.current;
+    clearReviews(switching);
     setBusy(true);
     setError("");
+    if (switching) {
+      teamRef.current = next;
+      setTeam(next);
+      setGraph(emptyGraph());
+      setSelected(null);
+      setDetail(false);
+      setFilter(initialFilters);
+      setQuery("");
+      setMode("overview");
+      setDepth(1);
+      setProfile(loadProfile(next.id, next.key));
+      localStorage.setItem("lge-selected-team", next.id);
+    }
     try {
-      const next = await syncGraph(undefined, controller.signal, setProgress);
-      const ids = new Set(next.items.map((n) => n.id));
-      setGone(
-        graphRef.current.source === "live"
-          ? graphRef.current.items.filter((n) => !ids.has(n.id)).length
-          : 0,
-      );
-      setGraph(next);
-      setSelected((prev) => next.items.find((n) => n.id === prev?.id) || null);
+      const data = await syncGraph(next, undefined, guard.signal, (s) => {
+        if (guard.current()) setProgress(s);
+      });
+      if (guard.current() && epoch === generation.current) {
+        setGraph(data);
+        setReviews({});
+        setSelected((old) => data.items.find((n) => n.id === old?.id) || null);
+      }
     } catch (e) {
-      if (!controller.signal.aborted)
-        setError(e instanceof Error ? e.message : "连接失败，请重试。");
+      if (guard.current()) setError((e as Error).message);
     } finally {
-      if (abort.current === controller) setBusy(false);
+      if (guard.current()) setBusy(false);
+    }
+  };
+  const discover = async () => {
+    discoveryAbort.current.abort();
+    const c = new AbortController();
+    discoveryAbort.current = c;
+    setBusy(true);
+    setProgress("发现可访问的团队…");
+    try {
+      const all = await discoverTeams(undefined, c.signal);
+      c.signal.throwIfAborted();
+      setTeams(all);
+      const restored =
+        all.find((t) => t.id === localStorage.getItem("lge-selected-team")) ||
+        all[0];
+      if (restored) await load(restored, true);
+      else {
+        setTeam(null);
+        teamRef.current = null;
+        setGraph(emptyGraph());
+        setBusy(false);
+      }
+    } catch (e) {
+      if (!c.signal.aborted) {
+        setError((e as Error).message);
+        setBusy(false);
+      }
     }
   };
   useEffect(() => {
@@ -149,256 +179,238 @@ function App() {
       .then((ok) => {
         if (ok) {
           setConnected(true);
-          void load();
+          void discover();
         }
       })
       .catch((e) => setError(e.message));
-    return () => abort.current?.abort();
+    return () => {
+      session.current.clear();
+      reviewAbort.current.abort();
+      discoveryAbort.current.abort();
+    };
   }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
-    localStorage.setItem("pvcr-theme", dark ? "dark" : "light");
+    localStorage.setItem("lge-theme", dark ? "dark" : "light");
   }, [dark]);
   const reset = () => {
-    abort.current?.abort();
+    session.current.clear();
+    generation.current++;
+    discoveryAbort.current.abort();
+    clearReviews();
     disconnect();
     setConnected(false);
+    setTeam(null);
+    teamRef.current = null;
+    setTeams([]);
     setGraph(emptyGraph());
     setSelected(null);
-    setGone(0);
-    setMode("overview");
+    setBusy(false);
+    setDetail(false);
     setError("");
-    setProject("all");
-    setQuery("");
+    setMode("overview");
   };
-  const useDemo = () => {
+  const issues = useMemo(
+      () => graph.items.filter((n) => n.kind === "issue"),
+      [graph],
+    ),
+    projects = graph.items.filter((n) => n.kind === "project"),
+    milestones = graph.items.filter((n) => n.kind === "milestone");
+  const diagnostics = useMemo(() => analyze(graph), [graph]),
+    summary = useMemo(() => summarize(graph.items), [graph]);
+  const reviewResult = (n: Item): ReviewResult =>
+    reviews[n.id] || calculateReview(profile.reviewPolicy, n.assigneeId, []);
+  const workstreams = (n: Item) => {
+    const values = (n.labels || [])
+      .map((id) => profile.workstreamLabelMap[id])
+      .filter(Boolean);
+    return values.length ? values : [profile.unmappedWorkstream];
+  };
+  const visible = useMemo(
+    () =>
+      issues.filter(
+        (n) =>
+          (archived || !n.archived) &&
+          (completed ||
+            !["completed", "canceled"].includes(n.statusType || "")) &&
+          (filter.project === "all" || n.projectId === filter.project) &&
+          (filter.milestone === "all" || n.milestoneId === filter.milestone) &&
+          (filter.assignee === "all" ||
+            (n.assigneeId || "none") === filter.assignee) &&
+          (filter.role === "all" ||
+            (profile.memberRoleMap[n.assigneeId || ""] || []).includes(
+              filter.role,
+            )) &&
+          (filter.status === "all" || n.stateId === filter.status) &&
+          (filter.priority === "all" ||
+            String(n.priority || 0) === filter.priority) &&
+          (filter.workstream === "all" ||
+            workstreams(n).includes(filter.workstream)) &&
+          (filter.review === "all" ||
+            reviewResult(n).status === filter.review) &&
+          (filter.reviewer === "all" ||
+            reviewResult(n).decisions.some(
+              (d) => d.reviewerId === filter.reviewer,
+            )),
+      ),
+    [graph, filter, archived, completed, profile, reviews],
+  );
+  const readReviews = async (targets: Item[], force = false) => {
+    if (!team || graph.source === "synthetic" || !profile.reviewPolicy?.enabled)
+      return;
+    const t = team;
+    const policy = profile.reviewPolicy;
+    if (force) clearReviews(false);
+    const token = reviewGen.current;
+    const signal = reviewAbort.current.signal;
+    setReviewBusy(true);
+    setReviewError("");
+    try {
+      const rs = await boundedMap(
+        targets,
+        3,
+        (n) => cache.current.load(t, n, policy, signal),
+        signal,
+      );
+      if (teamRef.current?.id !== t.id || token !== reviewGen.current) return;
+      setReviews((prev) => ({
+        ...prev,
+        ...Object.fromEntries(targets.map((n, i) => [n.id, rs[i]])),
+      }));
+    } catch (e) {
+      if (!signal.aborted)
+        setReviewError(
+          "审阅读取未完整成功，已保留上次完整结果。" + (e as Error).message,
+        );
+    } finally {
+      if (teamRef.current?.id === t.id && token === reviewGen.current)
+        setReviewBusy(false);
+    }
+  };
+  useEffect(() => {
+    if (!graph.syncedAt || !profile.reviewPolicy?.enabled) return;
+    const pending = issues.filter((n) =>
+      profile.reviewPolicy!.inReviewStateIds.includes(n.stateId || ""),
+    );
+    if (pending.length) void readReviews(pending);
+  }, [graph.syncedAt, profile]);
+  const select = (n: Item) => {
+    setSelected(n);
+    setDetail(true);
+    if (n.kind === "issue" && !reviews[n.id]) void readReviews([n]);
+  };
+  const updateFilter = (key: keyof typeof filter, value: string) =>
+    setFilter((f) => ({ ...f, [key]: value }));
+  const title = modes.find((m) => m[0] === mode)![1];
+  const isGraph = ["dependency", "focus", "combined"].includes(mode);
+  const demo = () => {
     reset();
-    setGraph(demoGraph());
+    const t = { id: "synthetic-team", key: "DEMO", name: "合成演示团队" };
+    teamRef.current = t;
+    setTeam(t);
+    setTeams([t]);
+    setProfile(defaultProfile(t.id, t.key));
+    setGraph({
+      ...demoGraph(),
+      teamId: t.id,
+      members: [
+        { id: "a", name: "研究员 A" },
+        { id: "b", name: "研究员 B" },
+      ],
+    });
     setSettings(false);
   };
-  const filtered = useMemo(() => {
-    let ns = graph.items.filter(
-      (n) =>
-        (project === "all" || n.id === project || n.projectId === project) &&
-        (archived || !n.archived),
-    );
-    if (mode === "dependency" || mode === "focus")
-      ns = ns.filter((n) => n.kind === "issue");
-    if (mode === "focus" && selected) {
-      const ids = neighborhood(graph, selected.id, depth, direction);
-      ns = ns.filter((n) => ids.has(n.id));
-    }
-    ns = ns.filter(
-      (n) =>
-        (!query ||
-          `${n.title} ${n.identifier || ""}`
-            .toLowerCase()
-            .includes(query.toLowerCase())) &&
-        (assignee === "all" || n.kind !== "issue" || n.assignee === assignee) &&
-        (status === "all" || n.kind !== "issue" || n.status === status),
-    );
-    const hidden = new Set<string>();
-    for (const id of collapsed) {
-      let front = [id];
-      const seen = new Set(front);
-      while (front.length) {
-        const next: string[] = [];
-        for (const v of front)
-          for (const e of graph.links.filter(
-            (e) => e.kind === "membership" || e.kind === "parent",
-          ))
-            if (e.source === v && !seen.has(e.target)) {
-              seen.add(e.target);
-              hidden.add(e.target);
-              next.push(e.target);
-            }
-        front = next;
-      }
-    }
-    ns = ns.filter((n) => !hidden.has(n.id));
-    const ids = new Set(ns.map((n) => n.id));
-    const es = graph.links.filter(
-      (e) =>
-        ids.has(e.source) &&
-        ids.has(e.target) &&
-        (mode === "hierarchy"
-          ? e.kind === "membership" || e.kind === "parent"
-          : mode === "dependency"
-            ? e.kind === "blocks" || e.kind === "related"
-            : true),
-    );
-    return { ns, es };
-  }, [
-    graph,
-    project,
-    archived,
-    mode,
-    selected?.id,
-    depth,
-    direction,
-    query,
-    assignee,
-    status,
-    collapsed,
-  ]);
-  useEffect(() => {
-    let stale = false;
-    if (mode === "overview" || mode === "project") return;
-    setLayoutBusy(true);
-    const { ns, es } = filtered;
-    elk
-      .layout({
-        id: "root",
-        layoutOptions: {
-          "elk.algorithm": "layered",
-          "elk.direction": "RIGHT",
-          "elk.spacing.nodeNode": "36",
-          "elk.layered.spacing.nodeNodeBetweenLayers": "65",
-        },
-        children: ns.map((n) => ({ id: n.id, width: 252, height: 108 })),
-        edges: es.map((e) => ({
-          id: e.id,
-          sources: [e.source],
-          targets: [e.target],
-        })),
-      })
-      .then((result) => {
-        if (stale) return;
-        setNodes(
-          (result.children || []).map((n) => ({
-            id: n.id,
-            type: "card",
-            position: { x: n.x || 0, y: n.y || 0 },
-            data: { item: ns.find((i) => i.id === n.id)! },
-          })),
-        );
-        setEdges(
-          es.map((e) => ({
-            id: e.id,
-            source: e.source,
-            target: e.target,
-            type: "smoothstep",
-            label:
-              e.kind === "blocks"
-                ? "阻塞"
-                : e.kind === "parent"
-                  ? "子任务"
-                  : e.kind === "related"
-                    ? "相关"
-                    : "归属",
-            markerEnd:
-              e.kind === "related"
-                ? undefined
-                : {
-                    type: MarkerType.ArrowClosed,
-                    color: e.kind === "blocks" ? "#df8e60" : "#8c99b0",
-                  },
-            style: {
-              stroke:
-                e.kind === "blocks"
-                  ? "#df8e60"
-                  : e.kind === "parent"
-                    ? "#9583d6"
-                    : "#8c99b0",
-              strokeWidth: e.kind === "blocks" ? 1.8 : 1.2,
-              strokeDasharray: e.kind === "related" ? "5 5" : undefined,
-            },
-            labelStyle: { fontSize: 10, fill: dark ? "#d0d9e8" : "#5a667a" },
-            labelBgStyle: { fill: dark ? "#171f2b" : "#fff" },
-          })),
-        );
-      })
-      .catch(() => setError("自动布局失败。请缩小筛选范围后重试。"))
-      .finally(() => {
-        if (!stale) setLayoutBusy(false);
-      });
-    return () => {
-      stale = true;
-    };
-  }, [filtered, layoutKey, dark, mode]);
-  const isGraph = !["overview", "project"].includes(mode);
-  const title = modes.find((m) => m[0] === mode)![1];
-  const projectTitle = projects.find((p) => p.id === project)?.title;
-  const viewProject = (id: string) => {
-    setProject(id);
-    setMode("combined");
-    setSelected(null);
-    setQuery("");
-  };
+  const options = (
+    name: string,
+    key: keyof typeof filter,
+    values: { id: string; name: string }[],
+  ) => (
+    <select
+      aria-label={name}
+      value={filter[key]}
+      onChange={(e) => updateFilter(key, e.target.value)}
+    >
+      <option value="all">{name}</option>
+      {values.map((v) => (
+        <option key={v.id} value={v.id}>
+          {v.name}
+        </option>
+      ))}
+    </select>
+  );
   return (
-    <div className="app">
+    <div className="app v2-app">
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-icon">
-            <Waypoints size={23} />
+            <Waypoints size={22} />
           </div>
           <div>
             <b>Graph Explorer</b>
-            <small>LINEAR · PVCR</small>
+            <small>LINEAR · v0.2.0</small>
           </div>
         </div>
-        <div className="team-switch">
-          <span className="team-avatar">P</span>
-          <div>
-            <b>PV Cleaning Robotics</b>
-            <small>私有团队 · 只读访问</small>
-          </div>
-          <ShieldCheck size={15} />
-        </div>
-        <div className="nav-label">WORKSPACE</div>
+        <label className="team-selector">
+          当前团队
+          <select
+            aria-label="选择团队"
+            disabled={
+              !teams.length || (!connected && graph.source !== "synthetic")
+            }
+            value={team?.id || ""}
+            onChange={(e) => {
+              const next = teams.find((t) => t.id === e.target.value);
+              if (next && next.id !== team?.id) void load(next, true);
+            }}
+          >
+            <option value="" disabled>
+              连接后选择团队
+            </option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.key} · {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <nav>
           {modes.map(([id, label, Icon]) => (
             <button
               key={id}
+              title={label}
               className={mode === id ? "active" : ""}
-              onClick={() => {
-                setMode(id);
-                if (id === "overview") setProject("all");
-              }}
+              onClick={() => setMode(id)}
             >
               <Icon size={18} />
               {label}
             </button>
           ))}
         </nav>
-        <div className="nav-label projects-label">
-          PROJECTS <span>{projects.length || "—"}</span>
-        </div>
+        <div className="nav-label">PROJECTS</div>
         <div className="project-nav">
           {projects.map((p) => (
             <button
               key={p.id}
-              onClick={() => viewProject(p.id)}
-              className={project === p.id ? "current" : ""}
+              onClick={() => {
+                updateFilter("project", p.id);
+                setMode("hierarchy");
+              }}
             >
-              <span className="project-dot" />
               {p.title}
             </button>
           ))}
-          {!projects.length && <p>连接后自动发现团队项目</p>}
         </div>
         <div className="sidebar-foot">
           <ShieldCheck size={17} />
-          <div>
-            <b>你的身份，你的数据</b>
-            <small>仅 PVCR · 无写入操作</small>
-          </div>
+          <span>所选团队隔离 · 只读</span>
         </div>
       </aside>
       <main>
         <header>
           <div className="breadcrumb">
-            PVCR <ChevronRight size={14} />
-            <b>{title}</b>
+            Workspace / {team?.key || "选择团队"} / {title}
           </div>
           <div className="header-actions">
-            <span className={`connection ${connected ? "online" : ""}`}>
-              {graph.source === "synthetic"
-                ? "合成演示"
-                : connected
-                  ? "Linear 已连接"
-                  : "尚未连接"}
-            </span>
             <button
               className="icon-button"
               aria-label="切换深浅色"
@@ -406,8 +418,15 @@ function App() {
             >
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
+            <button
+              className="button small"
+              disabled={!team}
+              onClick={() => setProfiles(true)}
+            >
+              团队配置
+            </button>
             <button className="button small" onClick={() => setSettings(true)}>
-              <SlidersHorizontal size={15} />
+              <SlidersHorizontal size={14} />
               连接设置
             </button>
           </div>
@@ -415,463 +434,539 @@ function App() {
         <section className="content">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">PVCR / TEAM INTELLIGENCE</div>
+              <div className="eyebrow">
+                {team?.name || "UNIVERSAL TEAM INTELLIGENCE"}
+              </div>
               <h1>
                 {title}
                 <span className="readonly">READ ONLY</span>
               </h1>
-              <p>{projectTitle || "理解任务之间的关系，让下一步更清晰。"}</p>
+              <p>逐层理解任务；需要时再展开关系。</p>
             </div>
             <button
               className="button primary"
-              disabled={busy}
-              onClick={() => (connected ? load() : setSettings(true))}
+              disabled={busy || graph.source === "synthetic"}
+              onClick={() =>
+                connected && team ? load(team) : setSettings(true)
+              }
             >
               <RefreshCw size={15} className={busy ? "spin" : ""} />
-              {busy ? "同步中…" : connected ? "刷新数据" : "连接 Linear"}
+              {busy ? "同步中…" : "刷新数据"}
             </button>
           </div>
           {graph.source === "synthetic" && (
             <div className="notice demo">
-              <span>
-                合成演示环境 · 所有节点和关系均为测试数据，不代表 PVCR
-                的真实状态。
-              </span>
-              <button onClick={reset}>
-                退出演示 <X size={14} />
-              </button>
-            </div>
-          )}
-          {error && (
-            <div className="notice error" role="alert">
-              <AlertTriangle size={17} />
-              {error}
-              <button onClick={() => setError("")} aria-label="关闭错误">
-                <X size={16} />
-              </button>
+              合成演示数据，不代表真实同步。
+              <button onClick={reset}>退出演示</button>
             </div>
           )}
           {busy && (
             <div className="notice" role="status">
               {progress}
-              <button onClick={() => abort.current?.abort()}>取消同步</button>
+              <button
+                onClick={() => {
+                  session.current.clear();
+                  generation.current++;
+                  setBusy(false);
+                }}
+              >
+                取消
+              </button>
             </div>
           )}
-          {!graph.syncedAt && !busy ? (
-            <div className="welcome">
+          {error && (
+            <div className="notice error" role="alert">
+              {error} {graph.syncedAt ? "仍显示上次成功快照。" : ""}
+            </div>
+          )}
+          {!graph.syncedAt ? (
+            <div className="welcome v2-welcome">
               <div className="welcome-copy">
-                <span className="pill">
-                  <ShieldCheck size={14} /> 私有空间 · 只读连接
-                </span>
+                <span className="pill">自己的身份 · 当前团队 · 实时只读</span>
                 <h2>
-                  让复杂任务，
-                  <br />
-                  形成清晰的脉络。
+                  {busy ? "正在准备团队数据…" : "从团队全貌，到下一步行动。"}
                 </h2>
                 <p>
-                  从团队全貌到单项任务，探索项目、里程碑和依赖关系。使用自己的
-                  Linear 身份连接，数据始终限定在 PVCR。
+                  {connected
+                    ? teams.length
+                      ? "请选择团队。只有完整同步成功后才展示统计。"
+                      : "当前身份没有可访问的团队，或团队发现尚未完成。"
+                    : "连接 Linear 后自动发现可访问团队。角色、工作流和审阅规则都由你配置。"}
                 </p>
                 <div className="welcome-actions">
                   <button
                     className="button primary"
-                    onClick={() => setSettings(true)}
+                    disabled={busy}
+                    onClick={() => (connected ? discover() : setSettings(true))}
                   >
-                    连接我的 Linear <ArrowUpRight size={17} />
+                    {connected ? "重新发现团队" : "连接 Linear"}
                   </button>
-                  <button className="button" onClick={useDemo}>
+                  <button className="button" disabled={busy} onClick={demo}>
                     体验合成演示
                   </button>
-                </div>
-                <small>
-                  不会保存 Access Token，也不会修改 Linear 中的任何内容。
-                </small>
-              </div>
-              <div className="illustration" aria-hidden="true">
-                <div className="orbit one" />
-                <div className="orbit two" />
-                <div className="mini-card top">
-                  <span className="dot completed" /> 场景与约束
-                </div>
-                <div className="mini-card center">
-                  <Waypoints size={22} /> 团队关系网络
-                </div>
-                <div className="mini-card bottom">
-                  <span className="dot started" /> 下一步行动
-                </div>
-                <div className="mini-label">CONTEXT → CLARITY</div>
-              </div>
-              <div className="welcome-features">
-                <div>
-                  <GitBranch />
-                  <b>看清层级</b>
-                  <span>项目、里程碑与子任务</span>
-                </div>
-                <div>
-                  <Network />
-                  <b>追踪依赖</b>
-                  <span>分清阻塞与一般关联</span>
-                </div>
-                <div>
-                  <Scan />
-                  <b>聚焦当下</b>
-                  <span>逐层探索上下游任务</span>
                 </div>
               </div>
             </div>
           ) : (
             <>
-              {!isGraph && (
+              {(isGraph || mode === "hierarchy" || mode === "reviews") && (
+                <div className="filter-bar">
+                  <label className="search">
+                    <input
+                      aria-label="搜索任务"
+                      placeholder="搜索并定位任务…"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                  </label>
+                  {options(
+                    "全部项目",
+                    "project",
+                    projects.map((p) => ({ id: p.id, name: p.title })),
+                  )}
+                  {options(
+                    "全部里程碑",
+                    "milestone",
+                    milestones.map((p) => ({ id: p.id, name: p.title })),
+                  )}
+                  {options("全部负责人", "assignee", [
+                    { id: "none", name: "未分配" },
+                    ...(graph.members || []),
+                  ])}
+                  {options("全部角色", "role", profile.roles)}
+                  {options("全部状态", "status", graph.states || [])}
+                  {options(
+                    "全部工作流",
+                    "workstream",
+                    [
+                      ...new Set([
+                        profile.unmappedWorkstream,
+                        ...Object.values(profile.workstreamLabelMap).filter(
+                          Boolean,
+                        ),
+                      ]),
+                    ].map((x) => ({ id: x, name: x })),
+                  )}
+                  {options(
+                    "全部优先级",
+                    "priority",
+                    ["未指定", "紧急", "高", "中", "低"].map((name, i) => ({
+                      id: String(i),
+                      name,
+                    })),
+                  )}
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={archived}
+                      onChange={(e) => setArchived(e.target.checked)}
+                    />
+                    已归档
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={completed}
+                      onChange={(e) => setCompleted(e.target.checked)}
+                    />
+                    已完成
+                  </label>
+                  <button
+                    className="button small"
+                    onClick={() => {
+                      setFilter(initialFilters);
+                      setQuery("");
+                    }}
+                  >
+                    重置筛选
+                  </button>
+                </div>
+              )}
+              {(mode === "overview" || mode === "project") && (
                 <>
                   <div className="stats">
                     {[
-                      [projects.length, "团队项目", FolderOpen],
-                      [issues.length, "任务总数", Layers],
-                      [diagnostics.blocked.size, "有未完成前置项", GitBranch],
-                      [diagnostics.cycles.length, "循环依赖组", AlertTriangle],
-                    ].map(([value, label, Icon]: any) => (
+                      [projects.length, "团队项目"],
+                      [summary.active, "活跃任务"],
+                      [diagnostics.blocked.size, "有未完成前置项"],
+                      [summary.completed, "已完成任务"],
+                    ].map(([n, label]) => (
                       <div className="stat" key={label}>
-                        <span>
-                          {label}
-                          <Icon size={17} />
-                        </span>
-                        <strong>{value}</strong>
+                        <span>{label}</span>
+                        <strong>{n}</strong>
                         <small>
-                          {label === "循环依赖组"
-                            ? "仅检测 Blocks 关系"
-                            : "基于完整团队快照"}
+                          完整快照 ·{" "}
+                          {graph.source === "live" ? "实时来源" : "合成数据"}
                         </small>
                       </div>
                     ))}
                   </div>
-                  <div className="section-heading">
-                    <h2>
-                      项目空间 <span>{projects.length}</span>
-                    </h2>
-                    <span>
-                      选择项目，展开它的关系图 <ArrowUpRight size={14} />
-                    </span>
+                  <div className="overview-bottom">
+                    <section className="health">
+                      <h3>任务状态与进展</h3>
+                      <p>
+                        {summary.completed} 完成 / {summary.canceled} 取消 /{" "}
+                        {summary.remaining} 剩余
+                      </p>
+                      <p>
+                        任务完成比例：
+                        {summary.ratio === null
+                          ? "无任务数据"
+                          : `${Math.round(summary.ratio * 100)}%`}
+                        （不代表工程完成度）
+                      </p>
+                      <div className="distribution">
+                        {summary.states.map(([s, n]) => (
+                          <span key={s}>
+                            {s} <b>{n}</b>
+                          </span>
+                        ))}
+                      </div>
+                      <p>
+                        逾期 {summary.overdue} · 未分配 {summary.unassigned} ·
+                        循环组 {diagnostics.cycles.length} · 孤立任务{" "}
+                        {diagnostics.isolated.length}
+                      </p>
+                      <p>
+                        不可用引用提示 {graph.warnings.length}
+                        ；不自动读取外部任务，不计算关键路径。
+                      </p>
+                      <button
+                        className="button small"
+                        onClick={() => setMode("reviews")}
+                      >
+                        查看审阅队列
+                      </button>
+                    </section>
+                    <section className="workload">
+                      <h3>活跃任务分布</h3>
+                      {[
+                        ...new Set(issues.map((n) => n.assigneeId || "none")),
+                      ].map((id) => {
+                        const list = issues.filter(
+                          (n) => (n.assigneeId || "none") === id && isActive(n),
+                        );
+                        return (
+                          <div key={id}>
+                            <span>
+                              {graph.members?.find((m) => m.id === id)?.name ||
+                                issues.find((n) => n.assigneeId === id)
+                                  ?.assignee ||
+                                "未分配"}
+                            </span>
+                            <b>
+                              {list.length} 活跃 ·{" "}
+                              {
+                                list.filter((n) => n.statusType === "started")
+                                  .length
+                              }{" "}
+                              进行 ·{" "}
+                              {
+                                list.filter((n) =>
+                                  diagnostics.blocked.has(n.id),
+                                ).length
+                              }{" "}
+                              阻塞 ·{" "}
+                              {
+                                list.filter((n) =>
+                                  profile.reviewPolicy?.inReviewStateIds.includes(
+                                    n.stateId || "",
+                                  ),
+                                ).length
+                              }{" "}
+                              待审阅
+                              <br />
+                              优先级{" "}
+                              {["紧急", "高", "中", "低"]
+                                .map(
+                                  (label, i) =>
+                                    `${label} ${list.filter((n) => n.priority === i + 1).length}`,
+                                )
+                                .join(" / ")}
+                            </b>
+                          </div>
+                        );
+                      })}
+                      <small>任务数不等同实际工作量或产能。</small>
+                    </section>
                   </div>
+                  <h2 className="section-title">项目空间</h2>
                   <div className="project-grid">
                     {projects.map((p) => {
-                      const list = issues.filter((i) => i.projectId === p.id),
-                        completed = list.filter(
-                          (i) => i.statusType === "completed",
-                        ).length;
+                      const s = summarize(
+                        issues.filter((n) => n.projectId === p.id),
+                      );
                       return (
                         <button
                           className="project-card"
                           key={p.id}
-                          onClick={() => viewProject(p.id)}
+                          onClick={() => {
+                            updateFilter("project", p.id);
+                            setMode("hierarchy");
+                          }}
                         >
-                          <div className="project-card-top">
-                            <div className="folder-icon">
-                              <FolderOpen size={23} />
-                            </div>
-                            <ArrowUpRight size={20} />
-                          </div>
+                          <FolderOpen size={23} />
                           <h3>{p.title}</h3>
                           <p>
-                            {list.length
-                              ? `${list.length} 个任务 · ${graph.items.filter((i) => i.kind === "milestone" && i.projectId === p.id).length} 个里程碑`
-                              : "暂无任务，项目已被自动发现"}
+                            {s.total} 个任务 · {s.completed} 完成 ·{" "}
+                            {s.remaining} 剩余
                           </p>
                           <div className="progress-track">
-                            <i
-                              style={{
-                                width: `${list.length ? (completed / list.length) * 100 : 0}%`,
-                              }}
-                            />
-                          </div>
-                          <div className="project-card-footer">
-                            <span>
-                              {completed}/{list.length} 已完成
-                            </span>
-                            <span>打开图谱 →</span>
+                            <i style={{ width: `${(s.ratio || 0) * 100}%` }} />
                           </div>
                         </button>
                       );
                     })}
+                    {!projects.length && (
+                      <div className="health">
+                        此团队没有项目。未归属项目的任务仍可在图谱和层级视图中查看。
+                      </div>
+                    )}
                   </div>
                   <div className="overview-bottom">
-                    <div className="health">
-                      <h3>
-                        <ShieldCheck size={18} /> 图谱检查
-                      </h3>
-                      <p>
-                        {diagnostics.cycles.length
-                          ? "检测到循环依赖，请在依赖视图中检查。"
-                          : "没有检测到 Blocks 循环。"}
-                      </p>
-                      <p>
-                        {diagnostics.isolated.length} 个任务没有任务间关系 ·{" "}
-                        {diagnostics.archived} 个已归档任务
-                      </p>
-                      <p>
-                        {graph.warnings.length} 个不可用引用 · {gone}{" "}
-                        个上次存在、本次不可见的节点
-                      </p>
-                      <small>
-                        不可见不等于已删除；可能是权限变化、移动或删除。没有工期数据，不计算关键路径。
-                      </small>
-                    </div>
-                    <div className="workload">
-                      <h3>团队分工</h3>
-                      {[
-                        ...new Set(issues.map((i) => i.assignee || "未分配")),
-                      ].map((name, i) => (
-                        <div key={name}>
-                          <span className={`avatar a${i % 3}`}>
-                            {name.slice(0, 1)}
-                          </span>
-                          <span>{name}</span>
-                          <b>
-                            {
-                              issues.filter(
-                                (n) => (n.assignee || "未分配") === name,
-                              ).length
-                            }
-                            <small> 项任务</small>
-                          </b>
-                        </div>
-                      ))}
-                    </div>
+                    <section className="health">
+                      <h3>里程碑进度</h3>
+                      {milestones.map((m) => {
+                        const s = summarize(
+                          issues.filter((n) => n.milestoneId === m.id),
+                        );
+                        return (
+                          <button
+                            className="milestone-row"
+                            key={m.id}
+                            onClick={() => {
+                              setFilter({ ...initialFilters, milestone: m.id });
+                              setMode("hierarchy");
+                            }}
+                          >
+                            <span>{m.title}</span>
+                            <b>
+                              {s.completed}/{s.total}
+                            </b>
+                          </button>
+                        );
+                      })}
+                    </section>
+                    <section className="health">
+                      <h3>最近更新</h3>
+                      {[...issues]
+                        .sort((a, b) =>
+                          (b.updatedAt || "").localeCompare(a.updatedAt || ""),
+                        )
+                        .slice(0, 6)
+                        .map((n) => (
+                          <button
+                            className="milestone-row"
+                            key={n.id}
+                            onClick={() => select(n)}
+                          >
+                            {n.identifier} · {n.title}
+                          </button>
+                        ))}
+                    </section>
                   </div>
                 </>
               )}
+              {mode === "hierarchy" && (
+                <Hierarchy
+                  graph={graph}
+                  items={visible.filter(
+                    (n) =>
+                      !query ||
+                      `${n.identifier} ${n.title}`
+                        .toLowerCase()
+                        .includes(query.toLowerCase()),
+                  )}
+                  onSelect={select}
+                />
+              )}
               {isGraph && (
                 <>
-                  <div className="filter-bar">
-                    <label className="search">
-                      <Search size={16} />
-                      <input
-                        aria-label="搜索任务"
-                        placeholder="搜索任务名称或编号…"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                      />
-                    </label>
-                    <select
-                      aria-label="项目筛选"
-                      value={project}
-                      onChange={(e) => setProject(e.target.value)}
-                    >
-                      <option value="all">全部项目</option>
-                      {projects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.title}
-                        </option>
+                  <div className="graph-actions">
+                    {mode === "combined" &&
+                      (
+                        ["blocks", "parent", "related", "grouping"] as const
+                      ).map((k) => (
+                        <label key={k}>
+                          <input
+                            type="checkbox"
+                            checked={visibility[k]}
+                            onChange={(e) =>
+                              setVisibility((v) => ({
+                                ...v,
+                                [k]: e.target.checked,
+                              }))
+                            }
+                          />
+                          {
+                            {
+                              blocks: "阻塞",
+                              parent: "父子",
+                              related: "一般相关",
+                              grouping: "项目 / 里程碑分组",
+                            }[k]
+                          }
+                        </label>
                       ))}
-                    </select>
-                    <select
-                      aria-label="负责人筛选"
-                      value={assignee}
-                      onChange={(e) => setAssignee(e.target.value)}
-                    >
-                      <option value="all">全部负责人</option>
-                      {[
-                        ...new Set(
-                          issues.map((i) => i.assignee).filter(Boolean),
-                        ),
-                      ].map((a) => (
-                        <option key={a}>{a}</option>
-                      ))}
-                    </select>
-                    <select
-                      aria-label="状态筛选"
-                      value={status}
-                      onChange={(e) => setStatus(e.target.value)}
-                    >
-                      <option value="all">全部状态</option>
-                      {[
-                        ...new Set(issues.map((i) => i.status).filter(Boolean)),
-                      ].map((s) => (
-                        <option key={s}>{s}</option>
-                      ))}
-                    </select>
-                    <label className="check">
-                      <input
-                        type="checkbox"
-                        checked={archived}
-                        onChange={(e) => setArchived(e.target.checked)}
-                      />
-                      已归档
-                    </label>
-                    <button
-                      className="button small"
-                      onClick={() => {
-                        setQuery("");
-                        setProject("all");
-                        setAssignee("all");
-                        setStatus("all");
-                        setCollapsed(new Set());
-                      }}
-                    >
-                      重置
-                    </button>
-                  </div>
-                  {mode === "focus" && (
-                    <div className="focus-toolbar">
+                    {mode === "focus" && (
+                      <>
+                        <span>
+                          聚焦 {selected?.identifier || "请点击一个任务"}
+                        </span>
+                        <select
+                          aria-label="聚焦方向"
+                          value={direction}
+                          onChange={(e) => setDirection(e.target.value as any)}
+                        >
+                          <option value="both">上下游与父子</option>
+                          <option value="up">上游</option>
+                          <option value="down">下游</option>
+                        </select>
+                        <button
+                          className="button small"
+                          onClick={() => setDepth((d) => d + 1)}
+                        >
+                          扩展一层（{depth}）
+                        </button>
+                        <button
+                          className="button small"
+                          onClick={() => setDepth(1)}
+                        >
+                          收起到一层
+                        </button>
+                      </>
+                    )}
+                    {mode === "dependency" && (
                       <span>
-                        {selected
-                          ? `聚焦：${selected.identifier || selected.title}`
-                          : "先从图中选择一个任务"}
+                        仅展示真实阻塞关系 · 前置 → 被阻塞 · Related To
+                        不参与布局
                       </span>
-                      <select
-                        aria-label="聚焦方向"
-                        value={direction}
-                        onChange={(e) => setDirection(e.target.value as any)}
-                      >
-                        <option value="both">上下游与父子</option>
-                        <option value="up">上游 / 父任务</option>
-                        <option value="down">下游 / 子任务</option>
-                      </select>
-                      <span>{depth} 层</span>
-                      <button
-                        className="button small"
-                        disabled={!selected}
-                        onClick={() => setDepth((d) => d + 1)}
-                      >
-                        扩展一层
-                      </button>
-                      <button
-                        className="button small"
-                        onClick={() => setDepth(1)}
-                      >
-                        重置层数
-                      </button>
+                    )}
+                  </div>
+                  {diagnostics.cycles.length > 0 && (
+                    <div className="notice error">
+                      存在 {diagnostics.cycles.length} 组循环依赖；图谱不是
+                      DAG，请检查循环节点。
                     </div>
                   )}
-                  <div className="graph-shell">
-                    <div className="graph-caption">
-                      <span>
-                        <span className="dot started" /> {filtered.ns.length}{" "}
-                        节点 / {filtered.es.length} 关系{" "}
-                        {layoutBusy && "· 布局中…"}
-                      </span>
-                      <button
-                        className="button small"
-                        onClick={() => setLayoutKey((k) => k + 1)}
-                      >
-                        <Maximize2 size={14} />
-                        自动布局
-                      </button>
-                    </div>
-                    <ReactFlow
-                      key={`${mode}-${layoutKey}-${nodes.map((n) => n.id).join()}`}
-                      nodes={nodes}
-                      edges={edges}
-                      nodeTypes={nodeTypes}
-                      onNodeClick={(_, n) => {
-                        setSelected(n.data.item as Item);
-                        setDetailOpen(true);
-                      }}
-                      fitView
-                      fitViewOptions={{
-                        minZoom: 0.55,
-                        maxZoom: 1,
-                        padding: 0.2,
-                      }}
-                      minZoom={0.08}
-                      maxZoom={1.8}
-                      nodesConnectable={false}
-                      nodesDraggable={false}
-                      onlyRenderVisibleElements
-                      colorMode={dark ? "dark" : "light"}
-                    >
-                      <Background gap={22} size={1} />
-                      <Controls showInteractive={false} />
-                      <MiniMap
-                        pannable
-                        zoomable
-                        nodeColor={(n) =>
-                          (n.data.item as Item).kind === "issue"
-                            ? "#b0b8cd"
-                            : "#8d7adc"
-                        }
-                      />
-                    </ReactFlow>
-                    {!filtered.ns.length && (
-                      <div className="graph-empty">
-                        没有符合条件的节点。请调整筛选或选择一个任务。
-                      </div>
+                  <GraphView
+                    graph={graph}
+                    items={visible}
+                    mode={mode as GraphMode}
+                    visibility={visibility}
+                    selected={selected?.id}
+                    onSelect={select}
+                    dark={dark}
+                    depth={depth}
+                    direction={direction}
+                    reviews={Object.fromEntries(
+                      issues.map((n) => [n.id, reviewResult(n)]),
                     )}
-                    <div className="legend">
-                      <span>
-                        <i className="line blocks" /> 阻塞 →
-                      </span>
-                      <span>
-                        <i className="line parent" /> 父子 →
-                      </span>
-                      <span>
-                        <i className="line" /> 归属 →
-                      </span>
-                      <span>
-                        <i className="line related" /> 一般相关
-                      </span>
-                    </div>
-                  </div>
-                  <div className="graph-note">
-                    <span>
-                      箭头由前置任务指向被阻塞任务。里程碑归属不表示依赖。
-                    </span>
-                    <span>
-                      {diagnostics.cycles.length} 循环组 ·{" "}
-                      {graph.warnings.length} 不可用引用
-                    </span>
-                  </div>
+                    query={query}
+                  />
                 </>
+              )}
+              {mode === "reviews" && (
+                <section className="review-queue">
+                  <div className="graph-actions">
+                    {options(
+                      "全部审阅状态",
+                      "review",
+                      Object.entries(reviewLabels).map(([id, name]) => ({
+                        id,
+                        name,
+                      })),
+                    )}
+                    {options("全部审阅人", "reviewer", graph.members || [])}
+                    <button
+                      className="button small"
+                      disabled={reviewBusy || !profile.reviewPolicy?.enabled}
+                      onClick={() => readReviews(visible, true)}
+                    >
+                      {reviewBusy ? "读取中…" : "刷新筛选任务的审阅"}
+                    </button>
+                    <span>
+                      优先自动读取配置的 In Review 任务；其余按需读取。
+                    </span>
+                  </div>
+                  {reviewError && (
+                    <div className="notice error">{reviewError}</div>
+                  )}
+                  {!profile.reviewPolicy?.enabled && (
+                    <div className="notice">
+                      未配置审阅策略。请在团队配置中选择审阅人和真实 In Review
+                      状态。
+                    </div>
+                  )}
+                  <div className="task-list">
+                    {visible
+                      .filter(
+                        (n) =>
+                          !query ||
+                          `${n.identifier} ${n.title}`
+                            .toLowerCase()
+                            .includes(query.toLowerCase()),
+                      )
+                      .map((n) => (
+                        <button
+                          className="task-row"
+                          key={n.id}
+                          onClick={() => select(n)}
+                        >
+                          <span>
+                            <small>
+                              {n.identifier} · {n.assignee || "未分配"}
+                            </small>
+                            <strong>{n.title}</strong>
+                          </span>
+                          <ReviewBadge result={reviewResult(n)} />
+                        </button>
+                      ))}
+                  </div>
+                </section>
               )}
             </>
           )}
           <footer>
             <span>
-              <ShieldCheck size={13} /> PVCR 范围隔离 · 只读 GraphQL
+              <ShieldCheck size={13} />
+              所选团队隔离 · 只读 GraphQL · v0.2.0
             </span>
             <span>
               {graph.syncedAt
-                ? `${graph.source === "synthetic" ? "演示生成" : "上次完整同步"} ${new Date(graph.syncedAt).toLocaleTimeString("zh-CN")}`
-                : "等待授权连接"}
+                ? `上次完整同步 ${new Date(graph.syncedAt).toLocaleString("zh-CN")}`
+                : "尚未完成同步"}
             </span>
           </footer>
         </section>
       </main>
-      {selected && detailOpen && isGraph && (
-        <aside className="detail">
+      {selected && detail && (
+        <aside className="detail v2-detail">
           <div className="detail-header">
-            <span>任务详情</span>
-            <button
-              className="icon-button"
-              aria-label="关闭详情"
-              onClick={() => setDetailOpen(false)}
-            >
-              <X size={19} />
+            <span>{selected.identifier} · 任务详情</span>
+            <button className="button small" onClick={() => setDetail(false)}>
+              关闭详情
             </button>
           </div>
           <div className="detail-body">
-            <div className="eyebrow">
-              {selected.identifier || selected.kind}
-            </div>
             <h2>{selected.title}</h2>
-            {diagnostics.blocked.has(selected.id) && (
-              <div className="notice">有未完成的阻塞项</div>
-            )}
-            {diagnostics.cycles.some((g) => g.includes(selected.id)) && (
-              <div className="notice error">此任务位于循环依赖中</div>
-            )}
+            <ReviewBadge result={reviewResult(selected)} />
             <dl>
               {[
                 ["负责人", selected.assignee],
                 ["状态", selected.status],
                 [
-                  "优先级",
-                  ["未指定", "紧急", "高", "中", "低"][selected.priority || 0],
-                ],
-                [
                   "项目",
                   projects.find((p) => p.id === selected.projectId)?.title,
                 ],
-                ["归档", selected.archived ? "已归档" : "未归档"],
+                [
+                  "里程碑",
+                  milestones.find((m) => m.id === selected.milestoneId)?.title,
+                ],
+                [
+                  "优先级",
+                  ["未指定", "紧急", "高", "中", "低"][selected.priority || 0],
+                ],
               ].map(([k, v]) => (
                 <div key={k}>
                   <dt>{k}</dt>
@@ -879,39 +974,26 @@ function App() {
                 </div>
               ))}
             </dl>
-            <div className="detail-actions">
-              {selected.kind === "issue" && (
-                <button
-                  className="button primary"
-                  onClick={() => {
-                    setMode("focus");
-                    setProject("all");
-                    setDepth(1);
-                    setQuery("");
-                    setAssignee("all");
-                    setStatus("all");
-                  }}
-                >
-                  <Scan size={15} />
-                  聚焦任务
-                </button>
-              )}
-              <button
-                className="button"
-                onClick={() =>
-                  setCollapsed((prev) => {
-                    const n = new Set(prev);
-                    n.has(selected.id)
-                      ? n.delete(selected.id)
-                      : n.add(selected.id);
-                    return n;
-                  })
-                }
-              >
-                {collapsed.has(selected.id) ? "展开子项" : "折叠子项"}
-              </button>
-            </div>
-            <h3>关系</h3>
+            <button
+              className="button primary"
+              onClick={() => {
+                setMode("focus");
+                setDepth(1);
+                setFilter(initialFilters);
+              }}
+            >
+              聚焦此任务
+            </button>
+            <h3>依赖影响</h3>
+            {(() => {
+              const a = dependencyImpact(graph, selected.id);
+              return (
+                <p>
+                  直接阻塞源 {a.direct.length} · 传递上游 {a.upstream.length} ·
+                  下游影响 {a.downstream.length}
+                </p>
+              );
+            })()}
             <div className="relation-list">
               {graph.links
                 .filter(
@@ -923,120 +1005,157 @@ function App() {
                       n.id === (e.source === selected.id ? e.target : e.source),
                   );
                   return (
-                    <button
-                      key={e.id}
-                      onClick={() => other && setSelected(other)}
-                    >
+                    <button key={e.id} onClick={() => other && select(other)}>
                       <small>
                         {e.kind === "blocks"
                           ? e.source === selected.id
                             ? "阻塞 →"
                             : "← 被阻塞于"
-                          : e.kind === "related"
-                            ? "相关"
-                            : e.kind === "parent"
-                              ? e.source === selected.id
-                                ? "子任务"
-                                : "父任务"
+                          : e.kind === "parent"
+                            ? e.source === selected.id
+                              ? "子任务"
+                              : "父任务"
+                            : e.kind === "related"
+                              ? "一般相关"
                               : "归属"}
                       </small>
-                      <span>{other?.identifier || other?.title}</span>
+                      <span>
+                        {other?.identifier ||
+                          other?.title ||
+                          "外部或不可用引用"}
+                      </span>
                     </button>
                   );
                 })}
             </div>
-            <h3>说明</h3>
-            <p className="description">
-              {selected.description || "暂无说明。"}
+            <h3>评论审阅（分析状态 ≠ Done）</h3>
+            {reviewError && <p role="alert">{reviewError}</p>}
+            {reviewResult(selected).warning && (
+              <p>{reviewResult(selected).warning}</p>
+            )}
+            <button
+              className="button small"
+              disabled={reviewBusy || !profile.reviewPolicy?.enabled}
+              onClick={() => readReviews([selected], true)}
+            >
+              刷新本任务审阅
+            </button>
+            <p>
+              {reviewResult(selected).boundary
+                ? `本轮开始 ${new Date(reviewResult(selected).boundary!).toLocaleString("zh-CN")}`
+                : "轮次边界尚未确认"}
             </p>
-            {selected.url && selected.url.startsWith("https://linear.app/") && (
+            {reviewResult(selected).decisions.map((d) => (
+              <div className="review-decision" key={d.reviewerId}>
+                <b>
+                  {d.name} · {d.decision}
+                </b>
+                <small>{new Date(d.at).toLocaleString("zh-CN")}</small>
+                <p>{d.excerpt}</p>
+              </div>
+            ))}
+            <h3>说明</h3>
+            <p className="description">{selected.description || "暂无说明"}</p>
+            {selected.url?.startsWith("https://linear.app/") && (
               <a
                 className="button"
                 href={selected.url}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                在 Linear 中打开 <ArrowUpRight size={15} />
+                在 Linear 中打开 ↗
               </a>
             )}
           </div>
         </aside>
       )}
+      {profiles && team && (
+        <ProfileEditor
+          key={team.id}
+          value={profile}
+          graph={graph}
+          onClose={() => setProfiles(false)}
+          onSave={(p) => {
+            clearReviews();
+            saveProfile(p);
+            setProfile(p);
+          }}
+        />
+      )}
       {settings && (
-        <div className="modal-backdrop" onClick={() => setSettings(false)}>
+        <div className="modal-backdrop">
           <section
             className="modal"
             role="dialog"
             aria-modal="true"
             aria-label="Linear 连接设置"
-            onClick={(e) => e.stopPropagation()}
           >
             <button
-              className="modal-close icon-button"
-              aria-label="关闭连接设置"
+              className="modal-close button small"
               onClick={() => setSettings(false)}
             >
-              <X size={20} />
+              关闭
             </button>
-            <div className="brand-icon">
-              <Link2 size={23} />
-            </div>
             <h2>连接你的 Linear</h2>
             <p>
-              以自己的身份授权，仅申请 <code>read</code>。应用只请求 PVCR
-              数据，不使用共享凭证。
+              仅申请
+              read。登录后先发现团队，再读取你明确选择的团队。访问范围仍受
+              Linear 权限控制。
             </p>
             <label className="field">
               公开 OAuth Client ID
               <input
+                aria-label="公开 OAuth Client ID"
                 value={client}
                 onChange={(e) => setClient(e.target.value)}
-                placeholder="粘贴 Client ID（不是 Secret 或 API Key）"
               />
             </label>
             <div className="callback">
-              <span>注册此回调地址</span>
+              <span>回调地址</span>
               <code>{callbackUrl()}</code>
             </div>
             <button
               className="button primary full"
               onClick={() => login(client).catch((e) => setError(e.message))}
             >
-              使用 Linear 授权 <ArrowUpRight size={16} />
+              使用 Linear 授权
             </button>
             <p className="fine">
-              Access / Refresh Token
-              仅存于页面内存。刷新页面需重新授权；当前页面内自动刷新令牌。Client
-              ID 是公开配置，可保存在此浏览器。
+              令牌仅保存在内存；重载后需重新授权。Team
+              选择和本地配置会保留，任务与评论不会写入本地存储。
             </p>
-            {connected && <button className="button full" disabled={busy} onClick={async () => {
-              setSettings(false);
-              setBusy(true);
-              setProgress("正在刷新 Linear 授权…");
-              try { await renewSession(); await load(); }
-              catch (e) { setError(e instanceof Error ? e.message : "授权刷新失败，请重新连接。"); setBusy(false); }
-            }}>刷新授权并同步</button>}
-            <div className="modal-bottom">
-              <button className="button" onClick={useDemo}>
+            <div className="settings-buttons">
+              {connected && (
+                <>
+                  <button
+                    className="button"
+                    onClick={async () => {
+                      try {
+                        await renewSession();
+                        setSettings(false);
+                        if (team) await load(team);
+                      } catch (e) {
+                        setError((e as Error).message);
+                      }
+                    }}
+                  >
+                    刷新授权并同步
+                  </button>
+                  <button
+                    className="button"
+                    onClick={() => {
+                      reset();
+                      setSettings(false);
+                    }}
+                  >
+                    断开本地会话
+                  </button>
+                </>
+              )}
+              <button className="button" onClick={demo}>
                 体验合成演示
               </button>
-              {connected && (
-                <button
-                  className="button"
-                  onClick={() => {
-                    reset();
-                    setSettings(false);
-                  }}
-                >
-                  <LogOut size={15} />
-                  断开本地会话
-                </button>
-              )}
             </div>
-            <small>
-              断开仅清除本页会话；撤销授权请到 Linear 的 Authorized
-              applications。
-            </small>
           </section>
         </div>
       )}

@@ -1,31 +1,43 @@
-# Architecture
+# Architecture v0.2.0
 
-UI (`main.tsx`) → Graph model (`model.ts`) ← Synchronizer (`api.ts`) → Transport → Linear GraphQL
+The existing authentication, transport, pagination, normalization and graph analysis were extended rather than replacing the stack.
 
-OAuth (`auth.ts`) owns authorization-code + PKCE S256, state validation, token response scope validation, in-memory credentials and single-flight rotating refresh. `syncGraph` accepts a Transport interface, so UI and normalization do not depend on the deployment target. ELK layout executes in a Web Worker to avoid freezing input during layout.
+| Module | Responsibility |
+|---|---|
+| auth.ts | PKCE, state validation, in-memory credentials, serialized rotating renewal |
+| api.ts | Query-only transport, timeouts/retries, paginated team discovery and team synchronization, bounded work pool |
+| team/types.ts | TeamContext identity contract |
+| team/session.ts | Abort and generation guards against stale asynchronous commits |
+| model.ts | Unified graph model, scoped normalization, boundary placeholders, SCC and neighborhood analysis |
+| profiles/model.ts | Allowlisted TeamProfile validation and browser-local storage |
+| review/engine.ts | Deterministic marker parser, round boundary and eligible reviewer status calculation |
+| review/api.ts | Validated issue comments/replies/history, pagination and in-memory result cache |
+| analytics/index.ts | Active/completed/canceled counts, milestone summaries and dependency impact |
+| graph/semantics.ts | View projection and layout fingerprint |
+| graph/layout.ts | ELK dependency input and topology settings |
+| graph/GraphView.tsx | Worker layout, rendered routes, stable viewport, MiniMap and attribution |
+| views/Hierarchy.tsx | Project/milestone and expandable issue hierarchy |
+| components/ | Profile editor and review badges |
+| main.tsx | Application state, team selector, overview, filters, details and queue orchestration |
 
-## Security model
+## Team switching
 
-Sites access control is the first boundary (owner-private). Linear OAuth is a separate per-user data boundary. GraphQL queries are read-only and use the user's bearer token. No credential is copied from the ChatGPT connector. No GraphQL mutations, telemetry, remote images, markdown HTML rendering, shared API keys, task exports or data storage exist. CSP restricts connection origin to Linear, disables object embedding and restricts scripts to self. React escapes task text. OAuth callbacks remove query strings immediately and use a no-referrer policy.
+Discovery lists metadata only. Selecting a team resolves its ID through a permission query before content reads. Project reads explicitly exclude descendants; issue reads use exact team ID and returned issues are checked again. Relation endpoints are requested as IDs only. No foreign endpoint is dereferenced.
 
-Browser storage contains only public Client ID, theme, and short-lived OAuth transaction state/verifier. Browser reload requires login again. Disconnect clears local credentials/data; it does not claim remote revocation. API 401/403 is surfaced for reauthorization. Refresh tokens rotate with a single in-tab refresh promise; separate tabs authorize separately.
+Team switch aborts previous sync/review requests, clears graph/details/results, increments request epochs, loads that team's local configuration, and only commits a completed candidate whose guard remains current. Abort alone is insufficient: epoch tests also cover transports which ignore AbortSignal. Same-team failed refreshes retain the previous successful graph. Review page failures do not commit partial review batches.
 
-## Relationship semantics
+## Comments and state history
 
-- Membership: project → milestone → issue, or project → issue without milestone.
-- Parent: parent issue → child issue, independent of milestone assignment.
-- Blocks: source prerequisite → blocked target. Incoming `inverseRelations` retains the API source/target; it is not reversed a second time.
-- Related: symmetric dashed link; no blocking or cycle meaning.
-- Unknown types are not guessed to be Blocks.
+Fields were checked against the live public Linear GraphQL schema before implementation. Comment exposes body, user ID/name, createdAt, updatedAt, url, parentId, documentContentId, quotedText and paginated children. Issue exposes paginated comments and history; IssueHistory exposes createdAt/fromStateId/toStateId. Inline descriptions are identified conservatively by non-null quotedText/document association, including ancestry. Deleted users have no eligible identity.
 
-Only Blocks are used for dependency SCCs and unfinished prerequisite flags. Parent/Blocks edges drive focus expansion. Isolated means no task-to-task edges; project membership does not disqualify isolation.
+Only selected-team issues can start review reads. Every response is revalidated. In-review candidates are prioritized. Up to three issues are loaded concurrently; each connection is fully paginated. Replies follow already validated comment threads and verify issue/team identity. Summary results exist only in memory and are invalidated on refresh, profile change or team switch. Large review threads may still be expensive; no hidden full-workspace comment scan occurs.
 
-## Refresh and migration
+## Layout and viewport
 
-Fetch all pages for projects, issues, milestones and both relation connections, including archived records. Abort or reject the entire candidate snapshot if any query fails, rather than displaying a successful-but-incomplete sync. Keep previous successful data visibly timestamped. No query follows a foreign endpoint. No cached conversation data feeds the application.
+All relations remain in the normalized model. View projections choose which to draw. Membership edges are omitted from the canvas and represented by hierarchy/containers. Only true Blocks enter dependency mode. Related edges do not drive ELK layering. ELK uses layered layout, greedy cycle breaking, sweep crossing minimization and orthogonal routing; custom SVG edges render returned sections. Cycles remain visible and explicitly warned rather than asserted to be a DAG.
 
-Sites and Pages build the same SPA with Vite `base`. Root callback avoids static-host route rewrites. Production auth still requires end-to-end validation. Preflight success alone cannot prove token exchange/refresh works.
+Grouped combined view uses milestone/project lanes with separate endpoint curves. Selection/details/status changes do not enter the structural layout fingerprint. The canvas has no dynamic remount key. Structural changes and explicit layout trigger a readable fit; search focuses a matching node. Large graphs are explored through projects, filters and focus rather than extreme zoom-out.
 
-## Server adapter contingency
+## Security
 
-If actual OAuth exchange/refresh fails browser compatibility or policy validation, stop direct-mode rollout. Implement the same Transport behind a same-origin BFF: encrypted per-user token records, opaque Secure/HttpOnly/SameSite cookies, CSRF checks, PKCE/state binding, atomic refresh rotation and server-side PVCR-scoped query allowlist. Use a separate OAuth registration and registered callback for that deployment. A same-origin proxy or custom domain is required if Pages and the BFF would otherwise depend on third-party cookies. Never proxy arbitrary GraphQL or use a shared account token. This contingency is documented, **not deployed**: current preflight results support testing the simpler public-client PKCE path first.
+No GraphQL mutations, shared tokens, secret-backed bypasses, external telemetry or HTML rendering of comments. React escapes task/comment text. The private hosting boundary is separate from Linear data authorization. Tokens remain in memory; OAuth transaction storage is short-lived. Local profiles are configuration only and are reconstructed through an allowlist on import. Public source contains synthetic fixtures only. No backend was introduced.

@@ -1,17 +1,18 @@
 import { describe, it, expect } from "vitest";
 import {
-  normalize,
+  normalize as scopedNormalize,
   analyze,
   neighborhood,
-  TEAM_KEY,
   type Item,
   type Link,
 } from "../src/model";
 import { paginate, syncGraph } from "../src/api";
+const normalize = (items: Item[], links: Link[], warnings: string[] = []) =>
+  scopedNormalize(items, links, warnings, "synthetic-team");
 const item = (id: string, extra: Partial<Item> = {}): Item => ({
   id,
   kind: "issue",
-  teamId: TEAM_KEY,
+  teamId: "synthetic-team",
   title: id,
   ...extra,
 });
@@ -50,8 +51,9 @@ describe("graph semantics", () => {
       [item("a"), item("secret", { teamId: "other" })],
       [edge("secret", "a")],
     );
-    expect(g.items).toHaveLength(1);
-    expect(g.links).toHaveLength(0);
+    expect(g.items.filter((n) => n.kind === "issue")).toHaveLength(1);
+    expect(g.items.some((n) => n.id === "secret")).toBe(false);
+    expect(g.links).toHaveLength(1);
     expect(g.warnings).toHaveLength(1);
   });
   it("keeps project, milestone and parent relationships distinct", () => {
@@ -118,21 +120,30 @@ describe("data boundaries", () => {
   it("stops immediately for denied team access", async () => {
     let calls = 0;
     await expect(
-      syncGraph(async () => {
-        calls++;
-        return { team: null };
-      }),
+      syncGraph(
+        { id: "synthetic-team", key: "SYN", name: "Synthetic" },
+        async () => {
+          calls++;
+          return { team: null };
+        },
+      ),
     ).rejects.toThrow("无权");
     expect(calls).toBe(1);
   });
   it("never returns a partially loaded snapshot", async () => {
     let calls = 0;
     await expect(
-      syncGraph(async () => {
-        calls++;
-        if (calls === 1) return { teams: { nodes: [{ id: "synthetic-team-id", key: TEAM_KEY }] } };
-        throw new Error("offline");
-      }),
+      syncGraph(
+        { id: "synthetic-team", key: "SYN", name: "Synthetic" },
+        async () => {
+          calls++;
+          if (calls === 1)
+            return {
+              team: { id: "synthetic-team", key: "SYN", name: "Synthetic" },
+            };
+          throw new Error("offline");
+        },
+      ),
     ).rejects.toThrow("offline");
   });
 });

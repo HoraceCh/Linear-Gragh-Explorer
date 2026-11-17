@@ -1,32 +1,24 @@
-# Deployment and handoff
+# Deployment v0.2.0
 
-## Phase 1: Sites
+Use the existing private preview and existing MIT repository. No additional Site/repository or public deployment is required.
 
-Registered site: `https://pvcr-team-graph-explorer.lyricaldot3.chatgpt.site/`
+## Local
 
-Keep owner-only access. Private Sites checkout has an internal hosting manifest declaring static `dist`. That internal manifest is excluded from the public GitHub repository; GitHub Pages uses its workflow instead. OAuth callback to register:
+1. Node 22+, `npm ci`.
+2. Put a public `VITE_LINEAR_CLIENT_ID` in ignored `.env.local`, or enter it in connection settings.
+3. Register the exact application-root callback shown by the app. PKCE S256, actor=user, scope=read; no client secret.
+4. `npm run dev`, `npm test`, `npm run build`.
 
-```text
-https://pvcr-team-graph-explorer.lyricaldot3.chatgpt.site/
-```
+The core is team-independent. A deployment's OAuth application may be limited by its registration to one workspace; source portability does not override that restriction. Other workspaces need their own authorized OAuth app. Multi-workspace sessions are out of scope.
 
-The site works as an interactive synthetic demo before OAuth setup. A workspace-private OAuth application has been created, and its public Client ID is configured. The available connector does not create OAuth apps. Configure a public application with PKCE, actor=user and read scope. Enter only its public Client ID in the site, authorize, and run the live acceptance checklist. Never send a Client Secret or token in chat.
+## Private Sites
 
-## Phase 2: GitHub source
+The private checkout retains its internal `.openai/hosting.json`; do not publish that manifest. Copy the sanitized application source from the feature branch, retain private hosting identity, set ignored environment configuration, build and deploy through the existing private source/version workflow. Keep owner-only access unchanged. Never copy tokens or task snapshots into source or archives.
 
-Requested target normalized from the whitespace-containing name: `HoraceCh/Linear-Gragh-Explorer`. The Public repository has been created at https://github.com/HoraceCh/Linear-Gragh-Explorer. Browser sign-in was used for creation; source updates use the GitHub connector.
+## GitHub
 
-The Public repository contains an MIT initialization commit followed by the sanitized implementation commit. Private Sites development history is retained separately; internal metadata is excluded from the public tree. The source includes MIT license, CI, architecture, deployment instructions and synthetic tests. Exclude node_modules, dist, local env, credentials, archives, private task snapshots and inspection output. Do not replace or force-push an existing repository.
+Use a feature branch and Pull Request. CI installs the lockfile, tests, typechecks and builds. Do not force-push or replace main history. Private-host development commits and sanitized public commits may have different SHAs; record both in the delivery report.
 
-## Phase 3: Pages (after acceptance)
+## Future Pages
 
-1. Register additional OAuth callback `https://horacech.github.io/Linear-Gragh-Explorer/` (only after confirming actual repository name).
-2. Set repository variable `LINEAR_CLIENT_ID` to the public ID. No token/secret required.
-3. Enable GitHub Pages with GitHub Actions source.
-4. Run `Publish Pages after acceptance`, checking the acceptance input only when live tests pass.
-5. Workflow builds with `VITE_BASE_PATH=/<repository-name>/`, tests, uploads dist and deploys.
-6. Verify initial load, OAuth return, token refresh, no-PVCR account denial, and absence of private data in all static assets/artifacts.
-
-Pages serves the public application shell. Linear data remains per-user, fetched after authorization. This is not equivalent to Sites' owner-only shell access. The user requested Pages migration, but it is deliberately not executed before acceptance. If the whole shell must remain private, retain private Sites or add an authenticated edge host instead of ordinary Pages.
-
-The SPA uses no history-based nested routes, so no 404 fallback is needed. A backend is not required if PKCE browser exchange and refresh pass; if they fail, use the BFF contingency described in ARCHITECTURE and re-run the security review.
+The manual Pages workflow remains inactive. Do not run it in this release. Vite base-path configuration and the root callback remain compatible with a later static host. Before migration, validate callback origin, denied accounts, deployment-cache consistency, large-team rendering and mobile touch UX. Public application hosting is separate from per-user authorization of private Linear data.
