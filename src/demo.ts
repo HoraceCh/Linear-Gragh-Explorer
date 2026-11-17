@@ -76,3 +76,34 @@ export function demoGraph() {
     source: "synthetic" as const,
   };
 }
+
+/** Reproducible synthetic visual benchmarks; never presented as synchronized data. */
+export function scaleGraph(count: 20 | 50 | 100) {
+  const base = demoGraph();
+  const items = base.items.filter((n) => n.kind !== "issue");
+  for (let i = 0; i < count; i++) items.push({
+    id: `scale-${i}`, kind: "issue", teamId: "synthetic-team",
+    identifier: `SCALE-${i + 1}`, title: `合成任务 ${i + 1} · 验证跨阶段协作与依赖`,
+    projectId: "demo-project", milestoneId: `m${Math.floor(i * 4 / count)}`,
+    assignee: `研究员 ${["A", "B", "C"][i % 3]}`, status: "待开始", statusType: "unstarted",
+  });
+  const total = count === 20 ? 100 : count === 50 ? 200 : 500;
+  const links: Link[] = [];
+  const add = (s: number, t: number, kind: "blocks" | "related") => links.push({
+    id: `${kind}-${s}-${t}`, source: `scale-${s}`, target: `scale-${t}`, kind,
+  });
+  const dependencyTarget = count === 100 ? 300 : count - 1;
+  outer: for (let distance = 1; distance < count; distance++) {
+    for (let s = 0; s + distance < count; s++) {
+      if (links.length >= dependencyTarget) break outer;
+      add(s, s + distance, "blocks");
+    }
+  }
+  outer: for (let distance = 2; distance < count; distance++) {
+    for (let s = 0; s + distance < count; s++) {
+      if (links.length >= total) break outer;
+      add(s, s + distance, "related");
+    }
+  }
+  return { ...normalize(items, links, [], "synthetic-team"), source: "synthetic" as const };
+}

@@ -6,7 +6,6 @@ import {
   MiniMap,
   Handle,
   Position,
-  MarkerType,
   BaseEdge,
   type EdgeProps,
   type NodeProps,
@@ -16,8 +15,9 @@ import {
 } from "@xyflow/react";
 import ELK, { type ElkNode } from "elkjs/lib/elk-api";
 import ElkWorker from "elkjs/lib/elk-worker.min.js?worker";
-import type { Graph, Item } from "../model";
+import { neighborhood, type Graph, type Item } from "../model";
 import { dependencyLayoutInput } from "./layout";
+import { renderEdges, currentLayoutNodes, type RoutePoint } from "./edges";
 import {
   graphProjection,
   layoutFingerprint,
@@ -124,12 +124,24 @@ export function GraphView({
     grouped,
   );
   const [nodes, setNodes] = useState<Node[]>([]),
-    [edges, setEdges] = useState<Edge[]>([]),
+    [routes, setRoutes] = useState<Map<string, RoutePoint[]>>(new Map()),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
+    [canvasHeight, setCanvasHeight] = useState(460),
     [layoutVersion, setLayoutVersion] = useState(0),
     [map, setMap] = useState(true);
   const instance = useRef<ReactFlowInstance | null>(null);
+  const shell = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const measure = () => {
+      if (shell.current) setCanvasHeight(Math.max(360, window.innerHeight - shell.current.getBoundingClientRect().top - 62));
+    };
+    const observer = new ResizeObserver(measure);
+    if (shell.current?.parentElement) observer.observe(shell.current.parentElement);
+    window.addEventListener("resize", measure);
+    measure();
+    return () => { observer.disconnect(); window.removeEventListener("resize", measure); };
+  }, []);
   const lastFit = useRef("");
   const revision = useRef(0);
   const latest = useRef({ projection, graph });
@@ -141,9 +153,8 @@ export function GraphView({
     setError("");
     const { projection: p, graph: g } = latest.current;
     const work = async () => {
-      let ns: Node[] = [],
-        es: Edge[] = [];
-      const routes = new Map<string, any[]>();
+      let ns: Node[] = [];
+      const routes = new Map<string, RoutePoint[]>();
       if (grouped) {
         const lanes = new Map<string, Item[]>();
         for (const n of p.nodes) {
@@ -211,41 +222,9 @@ export function GraphView({
             );
         }
       }
-      es = p.links.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        type: "routed",
-        data: {
-          points: grouped ? undefined : routes.get(e.id),
-          kind:
-            e.kind === "blocks"
-              ? "阻塞 →"
-              : e.kind === "parent"
-                ? "父子 →"
-                : "一般相关",
-        },
-        markerEnd:
-          e.kind === "related"
-            ? undefined
-            : {
-                type: MarkerType.ArrowClosed,
-                color: e.kind === "blocks" ? "#d5864e" : "#9273d1",
-              },
-        style: {
-          stroke:
-            e.kind === "blocks"
-              ? "#d5864e"
-              : e.kind === "parent"
-                ? "#9273d1"
-                : "#8794a6",
-          strokeWidth: 1.7,
-          strokeDasharray: e.kind === "related" ? "6 5" : undefined,
-        },
-      }));
       if (stale || run !== revision.current) return;
       setNodes(ns);
-      setEdges(es);
+      setRoutes(routes);
       setBusy(false);
       // Structural changes fit once. Details, selection and theme never remount the canvas.
       const fitKey = fingerprint + layoutVersion;
@@ -292,9 +271,11 @@ export function GraphView({
         duration: 200,
       });
   }, [query, nodes]);
-  const displayNodes: Node[] = nodes.map((n) => ({
+  const direct = mode === "focus" && selected ? neighborhood(graph, selected, 1, direction) : null;
+  const displayNodes: Node[] = currentLayoutNodes(nodes, projection.nodes, grouped).map((n) => ({
     ...n,
     selected: n.id === selected,
+    style: { ...n.style, opacity: direct && n.type !== "group" && !direct.has(n.id) ? 0.5 : 1 },
     data: { ...n.data, review: reviews[n.id] },
   }));
   return (
@@ -331,11 +312,16 @@ export function GraphView({
           小地图
         </label>
       </div>
-      <div className="graph-shell v2-graph">
+      <div className="graph-shell v2-graph" ref={shell} style={{height: canvasHeight, minHeight: 360}}>
         {error && <div className="graph-empty">{error}</div>}
         <ReactFlow<Node, Edge>
           nodes={displayNodes}
-          edges={edges}
+          edges={renderEdges(projection.links, grouped ? undefined : routes).map((e) => ({ ...e,
+            style: { ...e.style,
+              strokeWidth: mode === "focus" && (e.source === selected || e.target === selected) ? 2.7 : 1.7,
+              opacity: direct && e.source !== selected && e.target !== selected ? 0.45 : 1,
+            },
+          }))}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onInit={(i) => {
@@ -373,7 +359,7 @@ export function GraphView({
         </ReactFlow>
         {!projection.nodes.length && !busy && (
           <div className="graph-empty">
-            没有匹配任务。请选择项目或调整筛选。
+            {mode === "focus" && !selected ? "请先选择一个聚焦任务。" : "没有匹配任务。请选择项目或调整筛选。"}
           </div>
         )}
       </div>

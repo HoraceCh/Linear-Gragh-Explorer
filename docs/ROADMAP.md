@@ -9,9 +9,10 @@
 - [x] Overview/progress/status/milestone/recent updates/dependency impact/workload indicators.
 - [x] Semantic hierarchy/dependency/focus/combined views, ELK route sections and minimap controls.
 - [x] Expanded automated tests and production build.
-- [ ] Real integration acceptance on two structurally different teams.
+- [x] Real synchronization/switching acceptance on two structurally different teams in one workspace.
 - [ ] Real marked-review round acceptance without writing test comments.
-- [ ] Full mobile touch, 100-node visual performance and deployment-cache acceptance.
-- [ ] Private preview deployment and sanitized feature-branch CI confirmation.
+- [x] Synthetic 20/50/100-node browser layout, search and progressive focus acceptance.
+- [ ] Full mobile touch, quantitative performance and deployment-cache consistency across clients.
+- [x] Existing owner-private preview deployment and sanitized feature-branch PR/CI.
 
 Release decisions remain explicit: no Linear writes, no shared credentials, no new backend, no Pages publication. A future shared profile service and multi-workspace sessions are separate releases.

@@ -19,7 +19,7 @@ import "@xyflow/react/dist/style.css";
 import "./style.css";
 import "./v2.css";
 import { analyze, emptyGraph, type Graph, type Item } from "./model";
-import { demoGraph } from "./demo";
+import { demoGraph, scaleGraph } from "./demo";
 import { syncGraph, discoverTeams, boundedMap } from "./api";
 import {
   configuredClient,
@@ -457,6 +457,13 @@ function App() {
           {graph.source === "synthetic" && (
             <div className="notice demo">
               合成演示数据，不代表真实同步。
+              {([20, 50, 100] as const).map((count) => <button key={count} onClick={() => {
+                setSelected(null);
+                setDetail(false);
+                setQuery("");
+                setFilter(initialFilters);
+                setGraph(scaleGraph(count));
+              }}>{count} 节点压力图</button>)}
               <button onClick={reset}>退出演示</button>
             </div>
           )}
@@ -465,6 +472,7 @@ function App() {
               {progress}
               <button
                 onClick={() => {
+                  discoveryAbort.current?.abort();
                   session.current.clear();
                   generation.current++;
                   setBusy(false);
@@ -810,6 +818,13 @@ function App() {
                       ))}
                     {mode === "focus" && (
                       <>
+                        <select aria-label="聚焦任务" value={selected?.id || ""} onChange={(e) => {
+                          const item = issues.find((n) => n.id === e.target.value);
+                          if (item) { setSelected(item); setDepth(1); }
+                        }}>
+                          <option value="">请选择任务</option>
+                          {issues.map((n) => <option key={n.id} value={n.id}>{n.identifier} · {n.title}</option>)}
+                        </select>
                         <span>
                           聚焦 {selected?.identifier || "请点击一个任务"}
                         </span>

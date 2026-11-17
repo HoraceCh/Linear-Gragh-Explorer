@@ -14,6 +14,7 @@ The existing authentication, transport, pagination, normalization and graph anal
 | review/api.ts | Validated issue comments/replies/history, pagination and in-memory result cache |
 | analytics/index.ts | Active/completed/canceled counts, milestone summaries and dependency impact |
 | graph/semantics.ts | View projection and layout fingerprint |
+| graph/edges.ts | Current-data reconciliation and relationship rendering independent of layout |
 | graph/layout.ts | ELK dependency input and topology settings |
 | graph/GraphView.tsx | Worker layout, rendered routes, stable viewport, MiniMap and attribution |
 | views/Hierarchy.tsx | Project/milestone and expandable issue hierarchy |
@@ -36,7 +37,7 @@ Only selected-team issues can start review reads. Every response is revalidated.
 
 All relations remain in the normalized model. View projections choose which to draw. Membership edges are omitted from the canvas and represented by hierarchy/containers. Only true Blocks enter dependency mode. Related edges do not drive ELK layering. ELK uses layered layout, greedy cycle breaking, sweep crossing minimization and orthogonal routing; custom SVG edges render returned sections. Cycles remain visible and explicitly warned rather than asserted to be a DAG.
 
-Grouped combined view uses milestone/project lanes with separate endpoint curves. Selection/details/status changes do not enter the structural layout fingerprint. The canvas has no dynamic remount key. Structural changes and explicit layout trigger a readable fit; search focuses a matching node. Large graphs are explored through projects, filters and focus rather than extreme zoom-out.
+Grouped combined view uses milestone/project lanes with separate endpoint curves. Selection/details/status changes do not enter the structural layout fingerprint. Related visibility updates rendered edges without recomputing node layout. Asynchronous layout results are reconciled with current visible data before cards render. The canvas has no dynamic remount key. Structural changes and explicit layout trigger a readable fit; search focuses a matching node. Large graphs are explored through projects, filters and focus rather than extreme zoom-out.
 
 ## Security
 

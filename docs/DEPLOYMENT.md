@@ -13,7 +13,7 @@ The core is team-independent. A deployment's OAuth application may be limited by
 
 ## Private Sites
 
-The private checkout retains its internal `.openai/hosting.json`; do not publish that manifest. Copy the sanitized application source from the feature branch, retain private hosting identity, set ignored environment configuration, build and deploy through the existing private source/version workflow. Keep owner-only access unchanged. Never copy tokens or task snapshots into source or archives.
+The private checkout retains its internal `.openai/hosting.json`; do not publish that manifest. Copy the sanitized application source from the feature branch, retain private hosting identity, set ignored environment configuration, build and deploy through the existing private source/version workflow. Keep owner-only access unchanged. The v0.2 preview was deployed to this existing owner-private Site; sharing and Pages were not enabled. Never copy tokens or task snapshots into source or archives.
 
 ## GitHub
 
@@ -21,4 +21,4 @@ Use a feature branch and Pull Request. CI installs the lockfile, tests, typechec
 
 ## Future Pages
 
-The manual Pages workflow remains inactive. Do not run it in this release. Vite base-path configuration and the root callback remain compatible with a later static host. Before migration, validate callback origin, denied accounts, deployment-cache consistency, large-team rendering and mobile touch UX. Public application hosting is separate from per-user authorization of private Linear data.
+The manual Pages workflow remains inactive. Do not run it in this release. Vite base-path configuration and the root callback remain compatible with a later static host. Before migration, validate callback origin, denied accounts, deployment-cache consistency, large-team performance and mobile touch UX. The static `_headers` file expresses no-cache HTML and immutable hashed assets, but host enforcement and all-client cache behavior must be verified separately. Public application hosting is separate from per-user authorization of private Linear data.

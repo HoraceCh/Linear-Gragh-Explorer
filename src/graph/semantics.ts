@@ -31,8 +31,8 @@ export function graphProjection(
     ...items,
     ...g.items.filter((n) => n.kind === "boundary" && boundaryIds.has(n.id)),
   ].filter((n) => n.kind === "issue" || n.kind === "boundary");
-  if (mode === "focus" && focus) {
-    const set = neighborhood(g, focus, depth, direction);
+  if (mode === "focus") {
+    const set = focus ? neighborhood(g, focus, depth, direction) : new Set<string>();
     nodes = nodes.filter((n) => set.has(n.id));
   }
   const ids = new Set(nodes.map((n) => n.id));

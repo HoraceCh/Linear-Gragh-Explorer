@@ -2,7 +2,7 @@
 
 ## Implemented and verified automatically
 
-82 tests passed locally, retaining all 18 original scenarios and adding:
+88 tests passed locally, retaining all 18 original scenarios and adding:
 
 - Empty/one/multiple paginated teams, arbitrary state metadata, strict team permission/issue checks, partial failure, abort and stale-generation guards.
 - Independent profiles, role validation, import team binding and unknown-field/token/snapshot rejection.
@@ -20,10 +20,19 @@ Live public schema inspection confirmed Comment body/user/createdAt/updatedAt/ur
 
 ## Browser and production acceptance
 
-Pending: real two-team switching, comment/history loading with configured genuine markers, before/after real-data screenshots, and feature-branch CI. Synthetic UI results must not be described as real integration.
+Verified in the authenticated private preview:
+
+- Discovery of several accessible Teams and complete synchronization of two structurally different Teams in the same workspace, including PVCR. Switching back immediately removed the former Team's content during loading, then restored the selected Team's complete snapshot.
+- A genuine In Review Issue loaded its comments and actual state-history boundary. With two selected reviewers and assignee exclusion configured locally, it correctly displayed Pending with zero valid approvals. Ordinary historical review text was not promoted to approval.
+- Opening details preserved the exact React Flow viewport transform. The old and new real-data dependency screenshots were captured privately. Dependency mode excludes Related To without removing it from the normalized model.
+- Browser benchmarks covered synthetic 20/100, 50/200 and 100/500 node/task-relationship samples. The 100-node graph contains 300 genuine dependency edges; focus narrowed it to 7 nodes at one hop and 13 at two hops. Search, details, grouping, dark mode, MiniMap drag-panning and hiding were exercised.
+- A review/selection transition crash found during browser QA was fixed and now has a regression test. Related visibility updates independently of layout and viewport; outgoing cards cannot render with missing current data.
+- Feature-branch CI passed for the first implementation commit. Final follow-up commit CI is recorded in the PR.
+
+Synthetic checks are not evidence of genuine reviewer approvals. There were no existing qualifying two-reviewer marker decisions available for a real Review Passed acceptance, and no comments were posted for testing. Private data, screenshots and profile configuration are excluded from this public record.
 
 ## Limitations requiring explicit follow-up
 
-No actual denied-access account is available. Real expiry/revocation, production fault injection, full mobile touch and 100-node visual behavior remain separate acceptance items. Local profiles are not shared. Schema availability alone does not prove every workspace grants history access; missing history yields Verification Required. No fake review markers are written to Linear for testing. The app has no semantic/AI approval inference.
+No actual denied-access account is available. Real expiry/revocation, production fault injection, full mobile touch, production rate-limit/fault injection and quantitative large-team performance profiling remain separate acceptance items. Local profiles are not shared. Schema availability alone does not prove every workspace grants history access; missing history yields Verification Required. No fake review markers are written to Linear for testing. The app has no semantic/AI approval inference.
 
 All private screenshot evidence stays outside the public repository. Public fixtures are synthetic. The existing private preview is the only deployment target in this release.

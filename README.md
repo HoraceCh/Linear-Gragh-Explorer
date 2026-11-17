@@ -21,6 +21,9 @@ Node 22+. Copy `.env.example` to `.env.local` and configure only your public OAu
 - Overview, project/milestone progress, workload indicators, recent updates, status and review filters.
 - Semantic graph views: hierarchy tree, Blocks-only dependency graph, progressive focus and independently toggled combined view.
 - ELK orthogonal dependency routes, stable canvas lifecycle, readable initial zoom and configurable high-contrast minimap.
+- Explicit synthetic 20/50/100-node stress fixtures for repeatable graph QA.
+
+Validation: 88 automated tests, TypeScript and production build; authenticated synchronization with two structurally different Teams in one workspace. See verification notes for remaining acceptance limits.
 
 The product remains useful without configuring roles or review rules. Each user configures their own browser; profiles are not automatically shared.
 
