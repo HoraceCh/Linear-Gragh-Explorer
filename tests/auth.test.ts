@@ -98,4 +98,21 @@ describe("OAuth protection", () => {
     auth.disconnect();
     await expect(auth.accessToken()).rejects.toThrow("连接");
   });
+  it("serializes concurrent renewals and uses the rotated refresh token next time", async () => {
+    const auth = await import("../src/auth");
+    await auth.login("public-test-client");
+    const t = JSON.parse(sessionStorage.getItem("pvcr-oauth")!);
+    location.search = `?code=synthetic&state=${t.state}`;
+    let version = 0;
+    const fetchMock = vi.fn(async () => { version++; const v=version; return {ok:true,json:async()=>({access_token:`synthetic-access-${v}`,refresh_token:`synthetic-refresh-${v}`,scope:"read",expires_in:3600})}; });
+    vi.stubGlobal("fetch",fetchMock);
+    await auth.finishLogin();
+    await Promise.all([auth.renewSession(), auth.renewSession()]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(await auth.accessToken()).toBe("synthetic-access-2");
+    await auth.renewSession();
+    expect(String((fetchMock.mock.calls as any)[2][1].body)).toContain("refresh_token=synthetic-refresh-2");
+    expect(String((fetchMock.mock.calls as any)[2][1].body)).not.toContain("client_secret");
+  });
+
 });

@@ -125,3 +125,10 @@ export function disconnect() {
   credentials = null;
   sessionStorage.removeItem("pvcr-oauth");
 }
+
+// Manual renewal uses the same single-flight refresh path as expiry renewal.
+export async function renewSession(): Promise<void> {
+  if (!credentials) throw new Error("请先连接 Linear。");
+  credentials.expiresAt = 0;
+  await accessToken();
+}

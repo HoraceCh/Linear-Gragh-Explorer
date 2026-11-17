@@ -52,6 +52,7 @@ import {
   login,
   finishLogin,
   disconnect,
+  renewSession,
   callbackUrl,
 } from "./auth";
 const elk = new ELK({ workerFactory: () => new ElkWorker() });
@@ -1008,6 +1009,13 @@ function App() {
               仅存于页面内存。刷新页面需重新授权；当前页面内自动刷新令牌。Client
               ID 是公开配置，可保存在此浏览器。
             </p>
+            {connected && <button className="button full" disabled={busy} onClick={async () => {
+              setSettings(false);
+              setBusy(true);
+              setProgress("正在刷新 Linear 授权…");
+              try { await renewSession(); await load(); }
+              catch (e) { setError(e instanceof Error ? e.message : "授权刷新失败，请重新连接。"); setBusy(false); }
+            }}>刷新授权并同步</button>}
             <div className="modal-bottom">
               <button className="button" onClick={useDemo}>
                 体验合成演示
