@@ -17,7 +17,7 @@
 3. **Partially passed:** project/issue/milestone totals and assignment totals match an independent private connector baseline. Verified incoming and outgoing Blocks for a representative task and all three parent-child links. Private task values and snapshots are deliberately excluded from this source repository. Exhaustive relation-set and milestone-membership comparison remains pending.
 4. Login as a user without PVCR access and verify no tasks are rendered or cached. OAuth read scope may cover the user's broader account, but the application's requests must remain Team constrained.
 5. Validate 429 recovery, offline refresh and partial-error UX in production (unit coverage is not a provider fault injection).
-6. Public GitHub repository created; source upload and hosted CI are verified separately. Source and artifacts exclude private task snapshots and credentials.
+6. **Passed:** sanitized source uploaded to Public GitHub repository. Hosted CI run #1 passed npm ci, all 17 tests and production build. Source excludes the private hosting manifest, fixed private Team UUID, task snapshots and credentials.
 7. Only after all above: Pages publish and repeat origin/callback/access tests.
 
 ## Security findings and limitations
@@ -31,3 +31,7 @@ Linear settings and GitHub browser sign-in are now available. No claim of full s
 ## OAuth registration update
 
 Created workspace-private OAuth application **PVCR Graph Explorer** in Baukasten Park. Public Client ID is configured as the SPA default. Public availability, client-credentials grants and webhooks are disabled. No secret or developer token was read or used. Production Site sign-in, real-user OAuth exchange and two full task-data syncs passed. Token rotation and expiry are not yet verified with the real provider.
+
+## Runtime scope recheck
+
+The public core now resolves a unique PVCR Team by a filtered key query in the authorized workspace. Every subsequent issue is checked against the returned UUID. Private production browser reauthorization and full synchronization passed after this change. The OAuth app remains private to its owning workspace. Internal hosting metadata stays in the private Sites checkout and is not part of the public source tree.

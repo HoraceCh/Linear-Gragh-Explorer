@@ -8,7 +8,7 @@
 - [x] E1. Compare counts and assignments privately; verify parent links and representative incoming/outgoing Blocks.
 - [ ] E2. Complete exhaustive relation/milestone comparison.
 - [x] F1. Create Public GitHub source repository.
-- [ ] F2. Upload complete source and confirm hosted CI.
+- [x] F2. Upload complete sanitized source and confirm hosted CI (install, tests and build passed).
 - [ ] G. Pass full security acceptance, then run manual GitHub Pages deployment.
 
 Source commits separate initial implementation from verified fixes/documentation. No Linear write operations are included in any stage.

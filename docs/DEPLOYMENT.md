@@ -10,13 +10,13 @@ Keep owner-only access. Private Sites checkout has an internal hosting manifest 
 https://pvcr-team-graph-explorer.lyricaldot3.chatgpt.site/
 ```
 
-The site works as an interactive synthetic demo before OAuth setup. The owner must sign into Linear to create an OAuth application; the available connector does not create OAuth apps. Configure a public application with PKCE, actor=user and read scope. Enter only its public Client ID in the site, authorize, and run the live acceptance checklist. Never send a Client Secret or token in chat.
+The site works as an interactive synthetic demo before OAuth setup. A workspace-private OAuth application has been created, and its public Client ID is configured. The available connector does not create OAuth apps. Configure a public application with PKCE, actor=user and read scope. Enter only its public Client ID in the site, authorize, and run the live acceptance checklist. Never send a Client Secret or token in chat.
 
 ## Phase 2: GitHub source
 
 Requested target normalized from the whitespace-containing name: `HoraceCh/Linear-Gragh-Explorer`. The Public repository has been created at https://github.com/HoraceCh/Linear-Gragh-Explorer. Browser sign-in was used for creation; source updates use the GitHub connector.
 
-Create an empty **Public** repository without initialization, then push the existing main history to it. The source includes MIT license, CI, architecture, deployment instructions and synthetic tests. Exclude node_modules, dist, local env, credentials, archives, private task snapshots and inspection output. Do not replace or force-push an existing repository.
+The Public repository contains an MIT initialization commit followed by the sanitized implementation commit. Private Sites development history is retained separately; internal metadata is excluded from the public tree. The source includes MIT license, CI, architecture, deployment instructions and synthetic tests. Exclude node_modules, dist, local env, credentials, archives, private task snapshots and inspection output. Do not replace or force-push an existing repository.
 
 ## Phase 3: Pages (after acceptance)
 
