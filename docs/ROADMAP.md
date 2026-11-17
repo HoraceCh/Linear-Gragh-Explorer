@@ -4,7 +4,8 @@
 - [x] B. React/TypeScript SPA, graph normalization, read-only GraphQL transport and PKCE implementation.
 - [x] C. Views, filters, details, worker layout, synthetic edge cases and initial build.
 - [x] D1. Create private OAuth application; verify real read-only PKCE callback, token exchange and live data sync.
-- [ ] D2. Verify real token rotation/expiry and a no-PVCR-permission account.
+- [x] D2. Verify two successive real-provider token rotations and subsequent synchronization.
+- [ ] D3. Verify natural expiry/revocation, cancellation during renewal and a no-PVCR-permission account.
 - [x] E1. Compare counts and assignments privately; verify parent links and representative incoming/outgoing Blocks.
 - [ ] E2. Complete exhaustive relation/milestone comparison.
 - [x] F1. Create Public GitHub source repository.
