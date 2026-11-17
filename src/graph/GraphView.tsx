@@ -144,8 +144,8 @@ export function GraphView({
   }, []);
   const lastFit = useRef("");
   const revision = useRef(0);
-  const latest = useRef({ projection, graph });
-  latest.current = { projection, graph };
+  const latest = useRef({ projection, graph, mode });
+  latest.current = { projection, graph, mode };
   useEffect(() => {
     let stale = false;
     const run = ++revision.current;
@@ -230,14 +230,15 @@ export function GraphView({
       const fitKey = fingerprint + layoutVersion;
       if (lastFit.current !== fitKey) {
         lastFit.current = fitKey;
-        requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (latest.current.mode === "focus") return;
           instance.current?.fitView({
             minZoom: 0.65,
             maxZoom: 1,
             padding: 0.18,
             duration: 200,
-          }),
-        );
+          });
+        });
       }
     };
     void work().catch(() => {
@@ -250,6 +251,16 @@ export function GraphView({
       stale = true;
     };
   }, [fingerprint, layoutVersion]);
+  useEffect(() => {
+    if (mode !== "focus" || !selected) return;
+    const node = nodes.find((n) => n.id === selected && !n.parentId);
+    if (!node) return;
+    const frame = requestAnimationFrame(() => instance.current?.setCenter(
+      node.position.x + 140, node.position.y + 82,
+      { zoom: Math.max(instance.current?.getZoom() || 0.85, 0.85), duration: 200 },
+    ));
+    return () => cancelAnimationFrame(frame);
+  }, [mode, selected, nodes]);
   useEffect(() => {
     if (!query) return;
     const found =
