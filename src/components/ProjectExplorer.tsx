@@ -38,7 +38,7 @@ export function ProjectExplorer({projects,milestones,issues,blocked,projectId,ch
  const groups=new Map<string,Item[]>();for(const m of projectMilestones)groups.set(m.id,[]);
  for(const issue of selected){const id=issue.milestoneId&&groups.has(issue.milestoneId)?issue.milestoneId:"";if(!groups.has(id))groups.set(id,[]);groups.get(id)!.push(issue);}
  return <section className="project-explorer project-workspace" aria-label="项目工作区">
-  <div className="project-workspace-heading"><div><button className="project-back-link" onClick={()=>choose("all")}>← 返回项目索引</button><span className="eyebrow">PROJECT WORKSPACE</span><h2>{project.title}</h2><p className="project-description">{project.description||"暂无项目描述。"}</p></div>
+  <div className="project-workspace-heading"><div><button className="project-back-link" onClick={()=>choose("all")}>返回项目索引</button><span className="eyebrow">PROJECT WORKSPACE</span><h2>{project.title}</h2><p className="project-description">{project.description||"暂无项目描述。"}</p></div>
    <div className="project-workspace-actions"><button className="button" onClick={()=>explore("hierarchy",project.id)}>项目任务层级</button><button className="button" onClick={()=>explore("dependency",project.id)}>项目依赖图</button></div>
   </div>
   <div className="project-stat-grid">
