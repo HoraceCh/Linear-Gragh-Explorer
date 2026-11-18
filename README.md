@@ -1,4 +1,4 @@
-# Linear Graph Explorer · v0.3.0
+# Linear Graph Explorer · v0.3.3
 
 Read-only task graphs and review intelligence for any team accessible to your Linear identity in the connected workspace. React, TypeScript, Vite, React Flow and ELKjs. MIT licensed.
 
@@ -11,7 +11,7 @@ npm run dev
 npm run build
 ```
 
-Node 22+. Copy `.env.example` to `.env.local` and configure only your public OAuth Client ID, or enter it in connection settings. Register the exact callback displayed in the application. Authorization uses `actor=user`, `scope=read`, PKCE S256. No client secret or shared token is used. The source has no default application credentials or private team IDs.
+Node 26 (与 `.nvmrc` 保持一致)。 Copy `.env.example` to `.env.local` and configure only your public OAuth Client ID, or enter it in connection settings. Register the exact callback displayed in the application. Authorization uses `actor=user`, `scope=read`, PKCE S256. No client secret or shared token is used. The source has no default application credentials or private team IDs.
 
 ## What changed
 
@@ -49,11 +49,11 @@ ELK routes are rendered for ungrouped dependency topology. Grouped combined view
 - [Verification](docs/VERIFICATION.md)
 - [Roadmap](docs/ROADMAP.md)
 
-The existing preview remains private. GitHub Pages is not enabled or published in this stage.
+The existing ChatGPT Site remains owner-private for development. Vercel is the intended primary production host; GitHub Pages is the public fallback. Neither is considered live production until its own OAuth, access-control and deployment checks pass.
 
 ## v0.3 product-quality preview
 
-The overview links into filtered work, the configured queue shows current review candidates, and graph controls distinguish a readable starting position from a whole-graph fit. Open **更多筛选** for secondary filters. Use **团队配置** to edit this browser’s team-specific policy.
+The overview links into filtered work, the configured queue shows current review candidates, and graph controls distinguish a readable starting position from a whole-graph fit. Open **更多筛选** for secondary filters. Use **视图与审阅设置** to edit this browser’s team-specific policy.
 
 See [UX audit](docs/UX-AUDIT.md), [performance measurements](docs/PERFORMANCE.md), and [release readiness](docs/RELEASE-READINESS.md). Run the synthetic browser suite after building with `npx playwright install chromium` and `npm run test:browser`.
 
@@ -63,6 +63,8 @@ v0.3.1 候选版支持 Vercel 根目录与 Pages 子路径构建。逐用户配�
 
 候选版依赖审计及待修项见 [依赖安全记录](docs/DEPENDENCY-SECURITY.md)。
 
-## v0.3.2
+## v0.3.3
 
-团队总览展示全队进度、阻塞和分工。项目探索提供可搜索的项目索引，在项目内按里程碑浏览、筛选任务或进入该项目的依赖图。部署见 [双目标部署](docs/DUAL-DEPLOYMENT.md)。
+项目探索升级为项目工作区，展示项目指标、状态分布、里程碑进展和全宽任务列表。审阅队列独立发现 In Review 任务，不受其他视图筛选影响；新增 Unable to assess 决策。视图与审阅设置明确区分个人本地配置与 Linear 团队权限。
+
+三端发布规划和验收见 [双目标部署](docs/DUAL-DEPLOYMENT.md)、[部署说明](docs/DEPLOYMENT.md) 和 [发布门禁](docs/RELEASE-READINESS.md)。
