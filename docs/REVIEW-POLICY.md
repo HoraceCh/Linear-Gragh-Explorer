@@ -39,3 +39,7 @@ A later APPROVE replaces that same user's earlier objection. Another user's outs
 ## Loading and limits
 
 In Review tasks load first. Other task reviews load on demand from details or explicit filtered-queue refresh. Requests use bounded concurrency, pagination, cancellation, retry handling and memory-only result caching. A partial comment read cannot yield success. Failed review batches retain prior completed results and display an error. A real review round with genuine marker decisions is still needed for production-level approval acceptance; synthetic tests never substitute for it.
+
+Candidate checks scope each comment, reply and history request by both issue and team on Linear. The history read supplies the current state and assignee for the calculation. An issue moving teams aborts the read. Replies with missing ancestry and decisions created at the exact transition timestamp are excluded. A thread with no children needs no separate reply query.
+
+Real two-reviewer approval acceptance pending external evidence. A qualifying sample requires two distinct eligible reviewer IDs posting valid decisions after the same verified transition.

@@ -36,3 +36,9 @@ Synthetic checks are not evidence of genuine reviewer approvals. There were no e
 No actual denied-access account is available. Real expiry/revocation, production fault injection, full mobile touch, production rate-limit/fault injection and quantitative large-team performance profiling remain separate acceptance items. Local profiles are not shared. Schema availability alone does not prove every workspace grants history access; missing history yields Verification Required. No fake review markers are written to Linear for testing. The app has no semantic/AI approval inference.
 
 All private screenshot evidence stays outside the public repository. Public fixtures are synthetic. The existing private preview is the only deployment target in this release.
+
+## Release candidate recheck
+
+The baseline lockfile installed cleanly on Node 24. All 88 original checks and the production build passed. The private version and PR contained identical public tracked files. Read-only checks on two differently configured teams confirmed switching cleared prior content. The current real review round had zero qualifying decisions from two configured reviewers. Real two-reviewer approval acceptance pending external evidence.
+
+Stabilization adds coverage for current assignee/state during review, ambiguous timestamps, removed or moved items, profile validation, anonymous references, transport denial and refresh recovery. Provider denial invalidates in-memory team data. Transient network failure preserves the previous complete snapshot. Actual revoked and access-denied identities remain outstanding.

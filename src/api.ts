@@ -1,4 +1,5 @@
 import type { TeamContext } from "./team/types";
+import { LinearAccessError } from "./team/access-error";
 import { accessToken } from "./auth";
 import { normalize, type Graph, type Item, type Link } from "./model";
 export type Transport = (
@@ -6,19 +7,25 @@ export type Transport = (
   variables: Record<string, unknown>,
   signal?: AbortSignal,
 ) => Promise<any>;
+export { LinearAccessError } from "./team/access-error";
+
 export const wait = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((res, rej) => {
     if (signal?.aborted) {
       rej(new DOMException("Canceled", "AbortError"));
       return;
     }
-    const id = setTimeout(res, ms);
+    const cancel = () => {
+      clearTimeout(id);
+      rej(new DOMException("Canceled", "AbortError"));
+    };
+    const id = setTimeout(() => {
+      signal?.removeEventListener("abort", cancel);
+      res();
+    }, ms);
     signal?.addEventListener(
       "abort",
-      () => {
-        clearTimeout(id);
-        rej(new DOMException("Canceled", "AbortError"));
-      },
+      cancel,
       { once: true },
     );
   });
@@ -40,7 +47,7 @@ export const directTransport: Transport = async (query, variables, signal) => {
         : AbortSignal.timeout(30000),
     });
     if (r.status === 401 || r.status === 403)
-      throw new Error("Linear 授权已失效或没有访问权限，请重新连接。");
+      throw new LinearAccessError("Linear 授权已失效或没有访问权限，请重新连接。");
     const body = await r.json().catch(() => ({}));
     if (
       r.status === 429 ||
@@ -54,7 +61,9 @@ export const directTransport: Transport = async (query, variables, signal) => {
       );
       continue;
     }
-    if (!r.ok || body.errors?.length)
+    if (body.errors?.some((e: any) => ["AUTHENTICATION_ERROR", "FORBIDDEN", "UNAUTHENTICATED"].includes(e.extensions?.code)))
+      throw new LinearAccessError("Linear 已拒绝访问，请重新连接。");
+    if (!r.ok || body.errors?.length || !body.data)
       throw new Error("Linear 查询失败；本次数据未完整返回，未替换上次快照。");
     return body.data;
   }
@@ -80,6 +89,35 @@ export async function paginate<T>(
   }
   throw new Error("数据超过分页安全上限。");
 }
+// Fixed application-owned selections keep every nested read scoped on the provider,
+// including when an issue moves after the initial team snapshot.
+export async function readScopedIssue(
+  operation: string,
+  selection: string,
+  team: TeamContext,
+  issueId: string,
+  cursor: string | null,
+  transport: Transport,
+  signal?: AbortSignal,
+  threadId?: string,
+) {
+  signal?.throwIfAborted();
+  const threadVariable = threadId === undefined ? "" : ",$thread:ID!";
+  const query = `query ${operation}($id:ID!,$team:ID!,$cursor:String${threadVariable}){
+    issues(first:1,includeArchived:true,filter:{id:{eq:$id},team:{id:{eq:$team}}}){
+      nodes{id team{id} ${selection}}
+    }
+  }`;
+  const data = await transport(query, {
+    id: issueId, team: team.id, cursor,
+    ...(threadId === undefined ? {} : { thread: threadId }),
+  }, signal);
+  signal?.throwIfAborted();
+  const node = data?.issues?.nodes?.[0];
+  if (node?.id !== issueId || node?.team?.id !== team.id)
+    throw new LinearAccessError("任务不可访问或 Team 已改变，请重新同步。");
+  return node;
+}
 export async function syncGraph(
   team: TeamContext,
   transport: Transport = directTransport,
@@ -94,7 +132,7 @@ export async function syncGraph(
     { id: team.id },
   );
   if (permission.team?.id !== team.id || permission.team?.key !== team.key)
-    throw new Error("当前身份无权访问所选团队。");
+    throw new LinearAccessError("当前身份无权访问所选团队。");
   const teamId = team.id;
   onProgress("读取 Projects 与 Issues…");
   const projects: any[] = await paginate(
@@ -153,12 +191,16 @@ export async function syncGraph(
     );
     const ms: any[] = await paginate(
       async (cursor) =>
-        (
-          await request(
-            "query SelectedTeamMilestones($id:String!,$cursor:String){project(id:$id){projectMilestones(first:50,after:$cursor,includeArchived:true){nodes{id name description}pageInfo{hasNextPage endCursor}}}}",
-            { id: p.id, cursor },
-          )
-        ).project.projectMilestones,
+{
+          const data = await request(
+            "query SelectedTeamMilestones($team:String!,$id:ID!,$cursor:String){team(id:$team){id projects(first:1,includeArchived:true,includeSubTeams:false,filter:{id:{eq:$id}}){nodes{id projectMilestones(first:50,after:$cursor,includeArchived:true){nodes{id name description}pageInfo{hasNextPage endCursor}}}}}}",
+            { team: teamId, id: p.id, cursor },
+          );
+          const project = data.team?.projects?.nodes?.[0];
+          if (data.team?.id !== teamId || project?.id !== p.id)
+            throw new LinearAccessError("项目已移出团队或不可访问，请重新同步。");
+          return project.projectMilestones;
+        },
     );
     for (const m of ms)
       items.push({
@@ -180,11 +222,11 @@ export async function syncGraph(
         const rs: any[] = await paginate(
           async (cursor) =>
             (
-              await request(
-                `query SelectedTeamRelations($id:String!,$cursor:String){issue(id:$id){${field}(first:100,after:$cursor,includeArchived:true){nodes{id type issue{id} relatedIssue{id}}pageInfo{hasNextPage endCursor}}}}`,
-                { id: i.id, cursor },
+              await readScopedIssue("SelectedTeamRelations",
+                `${field}(first:100,after:$cursor,includeArchived:true){nodes{id type issue{id} relatedIssue{id}}pageInfo{hasNextPage endCursor}}`,
+                team, i.id, cursor, transport, signal,
               )
-            ).issue[field],
+            )[field],
         );
         for (const r of rs) {
           if (r.type === "blocks" || r.type === "related")
@@ -224,11 +266,11 @@ export async function syncGraph(
       const labels = await paginate<any>(
         async (cursor) =>
           (
-            await request(
-              "query IssueLabels($id:String!,$cursor:String){issue(id:$id){labels(first:100,after:$cursor){nodes{id}pageInfo{hasNextPage endCursor}}}}",
-              { id: i.id, cursor },
+            await readScopedIssue("IssueLabels",
+              "labels(first:100,after:$cursor){nodes{id}pageInfo{hasNextPage endCursor}}",
+              team, i.id, cursor, transport, signal,
             )
-          ).issue.labels,
+          ).labels,
       );
       const item = graph.items.find((n) => n.id === i.id);
       if (item) item.labels = labels.map((l) => l.id);

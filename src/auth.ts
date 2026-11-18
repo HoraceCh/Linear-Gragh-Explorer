@@ -1,3 +1,4 @@
+import { LinearAccessError } from "./team/access-error";
 const AUTH = "https://linear.app/oauth/authorize",
   TOKEN = "https://api.linear.app/oauth/token";
 let credentials: {
@@ -62,18 +63,24 @@ async function exchange(params: Record<string, string>) {
     body: new URLSearchParams(params),
     signal: AbortSignal.timeout(30000),
   });
-  if (!r.ok) throw new Error("OAuth 令牌交换失败，请重新授权。");
+  if (!r.ok) {
+    const failure = await r.json().catch(() => null);
+    if (r.status === 401 || r.status === 403 || failure?.error === "invalid_grant" || failure?.error === "invalid_client")
+      throw new LinearAccessError("Linear 授权已失效，请重新连接。");
+    throw new Error("OAuth 令牌交换暂时失败，请重试。");
+  }
   const t = await r.json();
   const scopes = Array.isArray(t.scope)
     ? t.scope
     : String(t.scope || "").split(/[ ,]+/);
   if (
-    !t.access_token ||
-    !t.refresh_token ||
+    typeof t.access_token !== "string" || !t.access_token ||
+    typeof t.refresh_token !== "string" || !t.refresh_token ||
+    !Number.isFinite(t.expires_in) || t.expires_in <= 0 ||
     scopes.some((s: string) => s && s !== "read") ||
     !scopes.includes("read")
   )
-    throw new Error("授权范围异常：仅接受 read。");
+    throw new LinearAccessError("授权范围或令牌响应异常：仅接受 read。");
   if (generation !== authGeneration)
     throw new DOMException("Authorization canceled", "AbortError");
   credentials = {
@@ -94,6 +101,10 @@ export async function finishLogin() {
   const saved = raw ? JSON.parse(raw) : null;
   if (
     !saved ||
+    typeof saved.verifier !== "string" || !saved.verifier ||
+    typeof saved.state !== "string" || !saved.state ||
+    typeof saved.clientId !== "string" || !saved.clientId ||
+    !Number.isFinite(saved.created) || saved.created > Date.now() ||
     p.get("state") !== saved.state ||
     Date.now() - saved.created > 600000 ||
     saved.redirect !== callbackUrl()
@@ -120,7 +131,7 @@ export async function accessToken() {
       refresh_token: credentials.refresh_token,
     })
       .catch((e) => {
-        if (generation === authGeneration) credentials = null;
+        if (generation === authGeneration && e instanceof LinearAccessError) credentials = null;
         throw e;
       })
       .finally(() => {

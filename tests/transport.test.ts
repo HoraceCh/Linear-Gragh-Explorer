@@ -65,3 +65,13 @@ it("network failures remain failures", async () => {
     directTransport("query Read { viewer { id } }", {}),
   ).rejects.toThrow("offline");
 });
+
+it.each([401, 403])("distinguishes HTTP %i permission failures from transient failures", async (status) => {
+  const { LinearAccessError } = await import("../src/api");
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ status }));
+  await expect(directTransport("query Read { viewer { id } }", {})).rejects.toBeInstanceOf(LinearAccessError);
+});
+it("rejects an empty success envelope", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => ({ data: null }) }));
+  await expect(directTransport("query Read { viewer { id } }", {})).rejects.toThrow("未完整");
+});

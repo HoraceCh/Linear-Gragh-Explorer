@@ -32,35 +32,21 @@ const c = {
   documentContentId: null,
   quotedText: null,
 };
+const scoped = (fields: Record<string, unknown>) => ({ issues: { nodes: [{ id: issue.id, team: {id: team.id}, ...fields }] } });
 const fake =
   (comments: any[] = [c]): Transport =>
   async (q, v) => {
     if (q.includes("ReviewComments"))
-      return {
-        issue: {
-          team: { id: team.id },
-          comments: v.cursor ? conn(comments) : conn([], "page2"),
-        },
-      };
+      return scoped({ comments: v.cursor ? conn(comments) : conn([], "page2") });
     if (q.includes("ReviewReplies"))
-      return {
-        comment: {
-          issue: { id: issue.id, team: { id: team.id } },
-          children: conn([]),
-        },
-      };
-    return {
-      issue: {
-        team: { id: team.id },
-        history: conn([
-          {
-            createdAt: "2026-01-02T00:00:00Z",
-            fromStateId: "todo",
-            toStateId: "review",
-          },
-        ]),
-      },
-    };
+      return scoped({ comments: conn([{ id: v.thread, children: conn([]) }]) });
+    return scoped({
+      state: { id: "review" }, assignee: { id: "owner" },
+      history: conn([{
+        createdAt: "2026-01-02T00:00:00Z",
+        fromStateId: "todo", toStateId: "review",
+      }]),
+    });
   };
 it("paginates comments and verifies real review boundary", async () =>
   expect((await fetchReview(team, issue, policy, fake())).status).toBe(
@@ -123,4 +109,40 @@ it("aborted reply fetch cannot populate cache", async () => {
     cache.load(team, issue, policy, controller.signal, fake()),
   ).rejects.toThrow();
   expect(cache.get(team.id, issue.id)).toBeUndefined();
+});
+
+it("uses current assignee and workflow state for a delayed review read", async () => {
+  const provider = fake();
+  for (const [field, id, expected] of [
+    ["assignee", "r", "Pending"], ["state", "done", "Verification Required"],
+  ]) {
+    const result = await fetchReview(team, issue, policy, async (q, v) => {
+      const data = await provider(q, v);
+      if (q.includes("ReviewHistory")) data.issues.nodes[0][field] = { id };
+      return data;
+    });
+    expect(result.status).toBe(expected);
+  }
+});
+
+it("rejects an issue moved to a different team during history reads", async () => {
+  const provider = fake();
+  await expect(fetchReview(team, issue, policy, async (q, v) => {
+    expect(q).toContain("filter:{id:{eq:$id},team:{id:{eq:$team}}}");
+    if (q.includes("ReviewHistory")) return { issues: { nodes: [] } };
+    return provider(q, v);
+  })).rejects.toThrow("不可访问");
+});
+
+it("ignores orphaned replies whose inline ancestry cannot be verified", async () =>
+  expect((await fetchReview(team, issue, policy, fake([{ ...c, parentId: "missing" }]))).approvals).toBe(0));
+
+it("reads replies only for threads with children", async () => {
+  const provider = fake([{ ...c, children: conn([]) }]);
+  let replyRequests = 0;
+  await fetchReview(team, issue, policy, async (q,v) => {
+    if (q.includes("ReviewReplies")) replyRequests++;
+    return provider(q,v);
+  });
+  expect(replyRequests).toBe(0);
 });

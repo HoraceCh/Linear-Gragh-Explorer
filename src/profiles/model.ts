@@ -44,8 +44,10 @@ export function validateProfile(value: unknown, teamId: string): TeamProfile {
     p.teamId !== teamId ||
     typeof p.teamKey !== "string" ||
     !Array.isArray(p.roles) ||
-    !p.memberRoleMap ||
-    !p.workstreamLabelMap ||
+    typeof p.memberRoleMap !== "object" ||
+    !p.memberRoleMap || Array.isArray(p.memberRoleMap) ||
+    typeof p.workstreamLabelMap !== "object" ||
+    !p.workstreamLabelMap || Array.isArray(p.workstreamLabelMap) ||
     typeof p.unmappedWorkstream !== "string"
   )
     throw new Error("配置格式或团队不匹配。");
@@ -79,7 +81,7 @@ export function validateProfile(value: unknown, teamId: string): TeamProfile {
       typeof r.excludeAssignee !== "boolean" ||
       !r.markers ||
       Object.values(r.markers).length !== 3 ||
-      Object.values(r.markers).some(
+      [r.markers.approve, r.markers.requestChanges, r.markers.hold].some(
         (x) => typeof x !== "string" || !/^\[REVIEW: [A-Z_]+\]$/i.test(x),
       ) ||
       new Set(Object.values(r.markers).map((x) => x.toUpperCase())).size !== 3)

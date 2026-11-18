@@ -54,7 +54,7 @@ export function normalize(
 ): Graph {
   const safe = items.filter(
       (n) => n.kind !== "issue" || n.teamId === expectedTeamId,
-    ),
+    ).map((item) => ({ ...item })),
     ids = new Set(safe.map((n) => n.id));
   const edges: Link[] = [];
   const boundaries = new Map<string, string>();
@@ -78,13 +78,10 @@ export function normalize(
     if (ids.has(source) && ids.has(target))
       edges.push({ id: `${kind}:${source}:${target}`, source, target, kind });
     else {
-      if (kind !== "membership")
-        edges.push({
-          id: `${kind}:${source}:${target}`,
-          source: boundary(source),
-          target: boundary(target),
-          kind,
-        });
+      if (kind !== "membership") {
+        const from = boundary(source), to = boundary(target);
+        edges.push({ id: `${kind}:${from}:${to}`, source: from, target: to, kind });
+      }
       notes.push(
         "存在不可用引用（可能已删除、权限变化或位于团队之外）；未展开读取。",
       );
@@ -98,6 +95,11 @@ export function normalize(
       else if (n.projectId) add(n.projectId, n.id, "membership");
       if (n.parentId) add(n.parentId, n.id, "parent");
     }
+  }
+  for (const n of safe) {
+    if (n.parentId && !ids.has(n.parentId)) n.parentId = boundaries.get(n.parentId);
+    if (n.projectId && !ids.has(n.projectId)) n.projectId = undefined;
+    if (n.milestoneId && !ids.has(n.milestoneId)) n.milestoneId = undefined;
   }
   for (const e of relations) add(e.source, e.target, e.kind);
   return {

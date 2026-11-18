@@ -156,3 +156,23 @@ describe("OAuth protection", () => {
     await expect(auth.accessToken()).rejects.toThrow("连接");
   });
 });
+
+it("distinguishes a temporary refresh interruption from a revoked grant", async () => {
+  const auth = await import("../src/auth");
+  const { LinearAccessError } = await import("../src/team/access-error");
+  await auth.login("public-test-client");
+  const t = JSON.parse(sessionStorage.getItem("pvcr-oauth")!);
+  location.search = `?code=synthetic&state=${t.state}`;
+  const success = { ok: true, json: async () => ({
+    access_token: "test-a", refresh_token: "test-r", scope: "read", expires_in: 3600,
+  }) };
+  const provider = vi.fn().mockResolvedValueOnce(success)
+    .mockRejectedValueOnce(new TypeError("offline")).mockResolvedValueOnce(success)
+    .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({error: "invalid_grant"}) });
+  vi.stubGlobal("fetch", provider);
+  await auth.finishLogin();
+  await expect(auth.renewSession()).rejects.toThrow("offline");
+  await expect(auth.renewSession()).resolves.toBeUndefined();
+  await expect(auth.renewSession()).rejects.toBeInstanceOf(LinearAccessError);
+  await expect(auth.accessToken()).rejects.toThrow("请连接");
+});

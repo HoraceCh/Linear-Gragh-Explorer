@@ -170,3 +170,6 @@ describe("review decisions and rounds", () => {
     expect(calc([comment("1")]).status).toBe("Partially Approved");
   });
 });
+
+it("requires creation strictly after the transition even when edited later", () =>
+  expect(calc([comment("same", "a", defaultMarkers.approve, { createdAt: boundary })]).approvals).toBe(0));

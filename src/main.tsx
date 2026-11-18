@@ -20,7 +20,7 @@ import "./style.css";
 import "./v2.css";
 import { analyze, emptyGraph, type Graph, type Item } from "./model";
 import { demoGraph, scaleGraph } from "./demo";
-import { syncGraph, discoverTeams, boundedMap } from "./api";
+import { syncGraph, discoverTeams, boundedMap, LinearAccessError } from "./api";
 import {
   configuredClient,
   login,
@@ -142,7 +142,7 @@ function App() {
         setSelected((old) => data.items.find((n) => n.id === old?.id) || null);
       }
     } catch (e) {
-      if (guard.current()) setError((e as Error).message);
+      if (guard.current()) reportFailure(e);
     } finally {
       if (guard.current()) setBusy(false);
     }
@@ -169,7 +169,7 @@ function App() {
       }
     } catch (e) {
       if (!c.signal.aborted) {
-        setError((e as Error).message);
+        reportFailure(e);
         setBusy(false);
       }
     }
@@ -199,6 +199,8 @@ function App() {
     discoveryAbort.current.abort();
     clearReviews();
     disconnect();
+    setProfiles(false);
+    setProfile(defaultProfile("", ""));
     setConnected(false);
     setTeam(null);
     teamRef.current = null;
@@ -209,6 +211,10 @@ function App() {
     setDetail(false);
     setError("");
     setMode("overview");
+  };
+  const reportFailure = (error: unknown) => {
+    if (error instanceof LinearAccessError) reset();
+    setError(error instanceof Error ? error.message : "读取失败，请重试。");
   };
   const issues = useMemo(
       () => graph.items.filter((n) => n.kind === "issue"),
@@ -278,8 +284,9 @@ function App() {
         ...Object.fromEntries(targets.map((n, i) => [n.id, rs[i]])),
       }));
     } catch (e) {
-      if (!signal.aborted)
-        setReviewError(
+      if (signal.aborted || token !== reviewGen.current) return;
+      if (e instanceof LinearAccessError) reportFailure(e);
+      else setReviewError(
           "审阅读取未完整成功，已保留上次完整结果。" + (e as Error).message,
         );
     } finally {
@@ -1150,7 +1157,7 @@ function App() {
                         setSettings(false);
                         if (team) await load(team);
                       } catch (e) {
-                        setError((e as Error).message);
+                        reportFailure(e);
                       }
                     }}
                   >

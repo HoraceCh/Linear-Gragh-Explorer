@@ -129,7 +129,7 @@ export function calculateReview(
       !c.user ||
       !eligible.has(c.user.id) ||
       !Number.isFinite(Date.parse(c.createdAt)) ||
-      Date.parse(c.createdAt) < Date.parse(boundary)
+      Date.parse(c.createdAt) <= Date.parse(boundary)
     )
       continue;
     const d = parseMarker(c.body, policy.markers);

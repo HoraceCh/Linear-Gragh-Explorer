@@ -1,4 +1,4 @@
-import { paginate, directTransport, type Transport } from "../api";
+import { paginate, directTransport, readScopedIssue, LinearAccessError, type Transport } from "../api";
 import type { TeamContext } from "../team/types";
 import type { Item } from "../model";
 import type { ReviewPolicy } from "../profiles/model";
@@ -16,47 +16,36 @@ export async function fetchReview(
   signal?: AbortSignal,
 ): Promise<ReviewResult> {
   if (issue.teamId !== team.id) throw new Error("拒绝读取其他团队评论。");
-  const request = async (q: string, v: Record<string, unknown>) => {
-    signal?.throwIfAborted();
-    const data = await transport(q, v, signal);
-    if (data.issue?.team?.id !== team.id)
-      throw new Error("评论 Team 校验失败。");
-    return data.issue;
+  const request = (operation: string, fields: string, cursor: string | null, thread?: string) =>
+    readScopedIssue(operation, fields, team, issue.id, cursor, transport, signal, thread);
+  const fields = "id body createdAt updatedAt url parentId documentContentId quotedText user{id name}";
+  type RawComment = Omit<ReviewComment, "inline" | "parentId"> & {
+    parentId?: string | null;
+    documentContentId?: string | null;
+    quotedText?: string | null;
+    children?: { nodes: { id: string }[] };
   };
-  const raw: any[] = await paginate(
-    async (cursor) =>
-      (
-        await request(
-          "query ReviewComments($id:String!,$cursor:String){issue(id:$id){team{id} comments(first:100,after:$cursor){nodes{id body createdAt updatedAt url parentId documentContentId quotedText user{id name}}pageInfo{hasNextPage endCursor}}}}",
-          { id: issue.id, cursor },
-        )
-      ).comments,
+  const raw = await paginate<RawComment>(async (cursor) =>
+    (await request("ReviewComments",
+      `comments(first:100,after:$cursor){nodes{${fields} children(first:1){nodes{id}}}pageInfo{hasNextPage endCursor}}`, cursor)
+    ).comments,
   );
-  // Follow only comment thread children already attached to a validated issue. Verify every child issue ID.
   const all = new Map(raw.map((c) => [c.id, c]));
-  let queue = raw.filter((c) => !c.parentId);
-  while (queue.length) {
-    const c = queue.shift()!;
-    const children: any[] = await paginate(async (cursor) => {
-      const data = await transport(
-        "query ReviewReplies($id:String!,$cursor:String){comment(id:$id){issue{id team{id}} children(first:100,after:$cursor){nodes{id body createdAt updatedAt url parentId documentContentId quotedText user{id name} issue{id team{id}}}pageInfo{hasNextPage endCursor}}}}",
-        { id: c.id, cursor },
-        signal,
-      );
-      if (
-        data.comment?.issue?.id !== issue.id ||
-        data.comment?.issue?.team?.id !== team.id
-      )
-        throw new Error("回复边界校验失败。");
-      return data.comment.children;
-    });
-    for (const child of children) {
-      if (child.issue?.id !== issue.id || child.issue?.team?.id !== team.id)
-        throw new Error("回复 Team 校验失败。");
-      if (!all.has(child.id)) {
-        all.set(child.id, child);
+  for (const root of raw) {
+    if (root.parentId || root.children?.nodes.length === 0) continue;
+    const replies = await paginate<RawComment>(async (cursor) => {
+      const node = await request("ReviewReplies",
+        `comments(first:1,filter:{id:{eq:$thread}}){nodes{id children(first:100,after:$cursor){nodes{${fields} issue{id team{id}}}pageInfo{hasNextPage endCursor}}}}`,
+        cursor, root.id);
+      const thread = node.comments?.nodes?.[0];
+      if (thread?.id !== root.id) throw new Error("评论线程已更改，请刷新。");
+      for (const reply of thread.children.nodes) {
+        if (reply.parentId !== root.id || reply.issue?.id !== issue.id || reply.issue?.team?.id !== team.id)
+          throw new LinearAccessError("回复 Team 或任务校验失败。");
       }
-    }
+      return thread.children;
+    });
+    for (const reply of replies) all.set(reply.id, reply);
   }
   const inline = (id: string): boolean => {
     const seen = new Set<string>();
@@ -64,46 +53,40 @@ export async function fetchReview(
     while (c && !seen.has(c.id)) {
       seen.add(c.id);
       if (c.documentContentId || c.quotedText != null) return true;
+      if (!c.parentId) return false;
       c = all.get(c.parentId);
     }
-    return false;
+    // A missing ancestor or malformed thread cannot establish a formal comment.
+    return true;
   };
-  const comments: ReviewComment[] = [...all.values()].map((c) => ({
-    ...c,
-    inline: inline(c.id),
+  const comments = [...all.values()].map((c) => ({
+    ...c, parentId: c.parentId ?? undefined, inline: inline(c.id),
   }));
+  let stateId: string | undefined;
+  let assigneeId: string | undefined;
   let boundary: string | undefined;
   try {
-    const history: any[] = await paginate(
-      async (cursor) =>
-        (
-          await request(
-            "query ReviewHistory($id:String!,$cursor:String){issue(id:$id){team{id} history(first:100,after:$cursor){nodes{createdAt fromStateId toStateId}pageInfo{hasNextPage endCursor}}}}",
-            { id: issue.id, cursor },
-          )
-        ).history,
-    );
+    const history = await paginate<Parameters<typeof roundBoundary>[0][number]>(async (cursor) => {
+      const node = await request("ReviewHistory",
+        "state{id} assignee{id} history(first:100,after:$cursor){nodes{createdAt fromStateId toStateId}pageInfo{hasNextPage endCursor}}", cursor);
+      if (!node.state?.id || (node.assignee !== null && !node.assignee?.id))
+        throw new Error("审阅任务身份数据不完整。");
+      if (cursor && (stateId !== node.state.id || assigneeId !== node.assignee?.id))
+        throw new Error("任务在读取期间发生变化。");
+      stateId = node.state.id;
+      assigneeId = node.assignee?.id;
+      return node.history;
+    });
     boundary = roundBoundary(history, policy.inReviewStateIds);
   } catch (e) {
     signal?.throwIfAborted();
+    if (e instanceof LinearAccessError) throw e;
     return {
-      ...calculateReview(
-        policy,
-        issue.assigneeId,
-        comments,
-        undefined,
-        issue.stateId,
-      ),
+      ...calculateReview(policy, assigneeId, [], undefined, stateId),
       warning: "状态历史读取失败；无法确认当前审阅轮次。",
     };
   }
-  return calculateReview(
-    policy,
-    issue.assigneeId,
-    comments,
-    boundary,
-    issue.stateId,
-  );
+  return calculateReview(policy, assigneeId, comments, boundary, stateId);
 }
 export class ReviewCache {
   private entries = new Map<string, ReviewResult>();

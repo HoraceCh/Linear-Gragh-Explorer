@@ -169,3 +169,23 @@ describe("universal team engine", () => {
     expect(calls).toBe(0);
   });
 });
+
+it.each(["SelectedTeamRelations", "IssueLabels"])("rechecks selected team on every %s page", async (operation) => {
+  const base = transportFor(team.id, [{id: "issue", title: "Synthetic", team: {id: team.id}}]);
+  await expect(syncGraph(team, async (q, v) => {
+    if (/query (SelectedTeamRelations|IssueLabels)/.test(q)) {
+      expect(q).toContain("team:{id:{eq:$team}}");
+      return { issues: {nodes: [{ id: "issue", team: {id: q.includes(operation) ? "foreign" : team.id},
+        relations: conn([]), inverseRelations: conn([]), labels: conn([]) }]} };
+    }
+    return base(q, v);
+  })).rejects.toThrow("Team");
+});
+
+it("rejects a profile with three arbitrary marker keys", () => {
+  const p = defaultProfile(team.id, team.key);
+  expect(() => validateProfile({ ...p, reviewPolicy: {
+    enabled: true, requiredApprovals: 1, eligibleReviewerIds: ["r"], excludeAssignee: true,
+    inReviewStateIds: ["review"], markers: {wrong: "[REVIEW: YES]", hold: "[REVIEW: HOLD]", requestChanges: "[REVIEW: NO]"},
+  } }, team.id)).toThrow("审阅策略");
+});
