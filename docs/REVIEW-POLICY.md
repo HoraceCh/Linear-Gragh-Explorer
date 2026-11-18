@@ -53,3 +53,19 @@ Real two-reviewer approval acceptance pending external evidence. A qualifying sa
 | 暂缓 | Hold、On hold、[REVIEW: HOLD] |
 
 大小写不限，说明可另起一行。代码、引用、行内讨论、存在相互冲突决定的整条评论均不计入。审阅详情按原因统计忽略项，显示本轮每位有效审阅人的最新决定。手动刷新重新读取评论和历史。入审前创建的评论在本轮编辑仍然不计入。Real two-reviewer approval acceptance pending external evidence
+
+
+## v0.3.3 · Unable to assess and candidate discovery
+
+| Decision | Default command | Effect |
+|---|---|---|
+| Approve | Approved / Approved with comments | Counts as one distinct reviewer approval |
+| Request changes | Request changes / Changes requested | Blocks Review Passed |
+| Hold | Hold / On hold | Blocks Review Passed |
+| Unable to assess | Unable to assess | Explicitly blocks Review Passed; not an approval and not a Hold |
+
+The latest valid decision per reviewer wins. A later decision can replace that reviewer's earlier Unable to assess; another reviewer's outstanding objection still blocks passing.
+
+The review queue discovers current In Review candidates from the synced Linear state name and configured state IDs independently of the personal review policy and global graph filters. When policy is disabled, users can still see the candidate tasks, but the app does not calculate or claim approval. Review search and project/status/reviewer filters are local to the review queue.
+
+Settings are browser-local and scoped to workspace, viewer and team. They do not change Linear permissions or automatically synchronize between members. Exported profiles include member and label IDs and must be shared only through a private team channel.
