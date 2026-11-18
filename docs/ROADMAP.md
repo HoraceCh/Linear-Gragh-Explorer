@@ -1,15 +1,18 @@
-# Tracked development phases
+# v0.2.0 delivery stages
 
-- [x] A. Scope discovery, private Sites registration, CORS preflights, API schema inspection.
-- [x] B. React/TypeScript SPA, graph normalization, read-only GraphQL transport and PKCE implementation.
-- [x] C. Views, filters, details, worker layout, synthetic edge cases and initial build.
-- [x] D1. Create private OAuth application; verify real read-only PKCE callback, token exchange and live data sync.
-- [x] D2. Verify two successive real-provider token rotations and subsequent synchronization.
-- [ ] D3. Verify natural expiry/revocation, cancellation during renewal and a no-PVCR-permission account.
-- [x] E1. Compare counts and assignments privately; verify parent links and representative incoming/outgoing Blocks.
-- [ ] E2. Complete exhaustive relation/milestone comparison.
-- [x] F1. Create Public GitHub source repository.
-- [x] F2. Upload complete sanitized source and confirm hosted CI (install, tests and build passed).
-- [ ] G. Pass full security acceptance, then run manual GitHub Pages deployment.
+- [x] Audit MVP, live schema inspection, safe source baseline.
+- [x] Dynamic paginated team discovery, explicit TeamContext, selected-team permission verification.
+- [x] Atomic team sync, cancellation/generation guards, local selected-team restoration.
+- [x] Team-local role/workstream/profile settings and validated JSON import/export/reset.
+- [x] Comment/reply/history reading and strict marker/current-round calculation.
+- [x] Read-only review queue, detail evidence and node status.
+- [x] Overview/progress/status/milestone/recent updates/dependency impact/workload indicators.
+- [x] Semantic hierarchy/dependency/focus/combined views, ELK route sections and minimap controls.
+- [x] Expanded automated tests and production build.
+- [x] Real synchronization/switching acceptance on two structurally different teams in one workspace.
+- [ ] Real marked-review round acceptance without writing test comments.
+- [x] Synthetic 20/50/100-node browser layout, search and progressive focus acceptance.
+- [ ] Full mobile touch, quantitative performance and deployment-cache consistency across clients.
+- [x] Existing owner-private preview deployment and sanitized feature-branch PR/CI.
 
-Source commits separate initial implementation from verified fixes/documentation. No Linear write operations are included in any stage.
+Release decisions remain explicit: no Linear writes, no shared credentials, no new backend, no Pages publication. A future shared profile service and multi-workspace sessions are separate releases.

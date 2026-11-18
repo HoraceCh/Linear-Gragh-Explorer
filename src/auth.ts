@@ -1,10 +1,13 @@
+import { LinearAccessError } from "./team/access-error";
 const AUTH = "https://linear.app/oauth/authorize",
   TOKEN = "https://api.linear.app/oauth/token";
 let credentials: {
   access_token: string;
   refresh_token: string;
   expiresAt: number;
+  clientId: string;
 } | null = null;
+let authGeneration = 0;
 let refreshing: Promise<string> | null = null;
 const encode = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes))
@@ -15,7 +18,7 @@ const random = () => encode(crypto.getRandomValues(new Uint8Array(32)));
 export const configuredClient = () =>
   localStorage.getItem("pvcr-client-id") ||
   (import.meta as any).env.VITE_LINEAR_CLIENT_ID ||
-  "0a9b769e6c0b069413e6d61021734b81";
+  "";
 export const callbackUrl = () => location.origin + location.pathname;
 export async function login(clientId: string) {
   if (!clientId.trim()) throw new Error("请先配置公开 OAuth Client ID。");
@@ -53,25 +56,35 @@ export async function login(clientId: string) {
   );
 }
 async function exchange(params: Record<string, string>) {
+  const generation = authGeneration;
   const r = await fetch(TOKEN, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(params),
     signal: AbortSignal.timeout(30000),
   });
-  if (!r.ok) throw new Error("OAuth 令牌交换失败，请重新授权。");
+  if (!r.ok) {
+    const failure = await r.json().catch(() => null);
+    if (r.status === 401 || r.status === 403 || failure?.error === "invalid_grant" || failure?.error === "invalid_client")
+      throw new LinearAccessError("Linear 授权已失效，请重新连接。");
+    throw new Error("OAuth 令牌交换暂时失败，请重试。");
+  }
   const t = await r.json();
   const scopes = Array.isArray(t.scope)
     ? t.scope
     : String(t.scope || "").split(/[ ,]+/);
   if (
-    !t.access_token ||
-    !t.refresh_token ||
+    typeof t.access_token !== "string" || !t.access_token ||
+    typeof t.refresh_token !== "string" || !t.refresh_token ||
+    !Number.isFinite(t.expires_in) || t.expires_in <= 0 ||
     scopes.some((s: string) => s && s !== "read") ||
     !scopes.includes("read")
   )
-    throw new Error("授权范围异常：仅接受 read。");
+    throw new LinearAccessError("授权范围或令牌响应异常：仅接受 read。");
+  if (generation !== authGeneration)
+    throw new DOMException("Authorization canceled", "AbortError");
   credentials = {
+    clientId: params.client_id,
     access_token: t.access_token,
     refresh_token: t.refresh_token,
     expiresAt: Date.now() + t.expires_in * 1000,
@@ -88,6 +101,10 @@ export async function finishLogin() {
   const saved = raw ? JSON.parse(raw) : null;
   if (
     !saved ||
+    typeof saved.verifier !== "string" || !saved.verifier ||
+    typeof saved.state !== "string" || !saved.state ||
+    typeof saved.clientId !== "string" || !saved.clientId ||
+    !Number.isFinite(saved.created) || saved.created > Date.now() ||
     p.get("state") !== saved.state ||
     Date.now() - saved.created > 600000 ||
     saved.redirect !== callbackUrl()
@@ -106,22 +123,27 @@ export async function accessToken() {
   if (!credentials) throw new Error("请连接 Linear。页面重载后需要重新授权。");
   if (credentials.expiresAt > Date.now() + 60000)
     return credentials.access_token;
-  if (!refreshing)
-    refreshing = exchange({
+  if (!refreshing) {
+    const generation = authGeneration;
+    const pending = exchange({
       grant_type: "refresh_token",
-      client_id: configuredClient(),
+      client_id: credentials.clientId,
       refresh_token: credentials.refresh_token,
     })
       .catch((e) => {
-        credentials = null;
+        if (generation === authGeneration && e instanceof LinearAccessError) credentials = null;
         throw e;
       })
       .finally(() => {
-        refreshing = null;
+        if (refreshing === pending) refreshing = null;
       });
+    refreshing = pending;
+  }
   return refreshing;
 }
 export function disconnect() {
+  authGeneration++;
+  refreshing = null;
   credentials = null;
   sessionStorage.removeItem("pvcr-oauth");
 }

@@ -1,10 +1,6 @@
-# Linear Graph Explorer · PVCR
+# Linear Graph Explorer · v0.2.0
 
-Private, read-only task graph explorer for **PV Cleaning Robotics (PVCR)**. React, TypeScript, Vite, React Flow, ELKjs. MIT licensed.
-
-## Status
-
-MVP implemented; real-user PKCE callback, token exchange, live synchronization and repeated refresh of task data have passed browser verification. Two successive real-provider token renewals and subsequent data syncs passed. A real denied-access account remains pending. The Sites deployment is owner-private. The optional demo is entirely synthetic. No real private tasks, tokens or client secrets are included in this repository. Source repository: https://github.com/HoraceCh/Linear-Gragh-Explorer. GitHub Pages is gated behind manual acceptance and is not enabled automatically.
+Read-only task graphs and review intelligence for any team accessible to your Linear identity in the connected workspace. React, TypeScript, Vite, React Flow and ELKjs. MIT licensed.
 
 ## Run
 
@@ -15,35 +11,42 @@ npm run dev
 npm run build
 ```
 
-Node 22+ recommended. Copy `.env.example` to `.env.local` if using a public OAuth Client ID at build time. Alternatively enter the public Client ID in the connection settings. **Never enter API keys, client secrets or access/refresh tokens there.**
+Node 22+. Copy `.env.example` to `.env.local` and configure only your public OAuth Client ID, or enter it in connection settings. Register the exact callback displayed in the application. Authorization uses `actor=user`, `scope=read`, PKCE S256. No client secret or shared token is used. The source has no default application credentials or private team IDs.
 
-## Connect Linear
+## What changed
 
-Create an OAuth application in Linear settings. Register the exact callback displayed by the deployed site's connection settings. Use authorization code + PKCE (S256), actor=user, scope=read. No secret is used by this SPA. Do not request write or admin scopes.
+- Paginated team discovery, explicit TeamContext, persisted selection and cancellable, atomic team synchronization.
+- Team-local profiles: arbitrary roles, member mappings, label-based workstreams, import/export, validation and reset.
+- Strict review markers in Linear comments; latest eligible reviewer decision in a confirmed current In Review round. No approval UI or Linear writes.
+- Overview, project/milestone progress, workload indicators, recent updates, status and review filters.
+- Semantic graph views: hierarchy tree, Blocks-only dependency graph, progressive focus and independently toggled combined view.
+- ELK orthogonal dependency routes, stable canvas lifecycle, readable initial zoom and configurable high-contrast minimap.
+- Explicit synthetic 20/50/100-node stress fixtures for repeatable graph QA.
 
-The callback is the app's root URL, including its trailing slash and any Pages base path. Tokens remain in JavaScript memory; the tab can refresh its own access token, but reloading requires authorization again. This deliberately avoids persistent browser bearer credentials. Only the public Client ID and theme preference persist. The temporary PKCE verifier/state are stored in sessionStorage for at most the callback validation window (10 minutes); callback processing removes them.
+Validation: 88 automated tests, TypeScript and production build; authenticated synchronization with two structurally different Teams in one workspace. See verification notes for remaining acceptance limits.
 
-## Features
+The product remains useful without configuring roles or review rules. Each user configures their own browser; profiles are not automatically shared.
 
-- Team overview and project discovery, including empty projects
-- Project / milestone membership and parent-child issue edges
-- Dependency, combined and focus views; iterative upstream/downstream expansion
-- Search, assignee/status/project filters, archived toggle, collapse, ELK worker layout, zoom and minimap
-- Details and safe outbound Linear links; light/dark layouts
-- Blocks-only cycle detection, unresolved references, isolated issues and unfinished prerequisites
-- Full pagination, bounded rate-limit retries, cancellation, timeout, atomic snapshot replacement
+## Data boundaries
 
-No durations are available, so this app makes **no critical path claim**.
+Authentication stays in memory. Browser storage contains only display preferences, selected Team ID, public Client ID, local profile configuration and temporary OAuth transaction state. Profiles can contain member and label IDs; exported profiles are private configuration and must not be committed publicly. Issues/comments are not persisted in localStorage, telemetry or source.
 
-## Boundaries
+All content operations receive the selected TeamContext. Returned issues, comments and replies are revalidated. Foreign relation endpoints become anonymous boundary placeholders; the app never follows them. Failed or incomplete data refreshes retain the previous complete snapshot. Switching teams clears it immediately and prevents stale writes.
 
-Team Key is fixed to PVCR in `src/model.ts`. A filtered, per-user query resolves exactly one matching team at runtime; its UUID is not published in source. Projects are queried through that resolved team, `includeSubTeams:false`. Issues use exact Team UUID filtering and each returned item is revalidated. Relations only query IDs of their endpoints; foreign endpoints are never expanded for metadata. A shared project belongs to PVCR if returned by `team.projects`; only PVCR issues within it are retrieved. Changing the JS client cannot grant rights that the user's Linear identity does not possess. OAuth read scope itself is not a team-scoped grant; the application enforces the narrower request scope.
+OAuth `read` is workspace-scoped at the provider; selected-team filtering is an additional application boundary. Each deployment needs an OAuth app allowed in its target workspace. Multi-workspace operation is outside this release.
 
-A missing reference is **not proof of deletion**. Deleted/trashed, moved, inaccessible and cross-team references may be indistinguishable to this API caller. The UI labels them unknown and counts nodes that disappeared between complete snapshots without probing other teams. Archived issues remain available through an explicit filter. Failed/partial refreshes keep the previous successful snapshot and its original sync timestamp.
+## Graphs
+
+Hierarchy uses project/milestone grouping and expandable task trees. Dependency shows only Blocks, with orange arrows from prerequisite to blocked task. Focus expands Blocks and parent/child neighbors one layer at a time. Combined starts with Blocks only; parent, related and grouping are opt-in. Related links are undirected and never participate in dependency analysis. No critical path is claimed without durations.
+
+ELK routes are rendered for ungrouped dependency topology. Grouped combined view deliberately uses a separate lane arrangement and curved React Flow endpoint routing; it does not claim to use ELK route geometry.
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
-- [Deployment and handoff](docs/DEPLOYMENT.md)
-- [Verification and security status](docs/VERIFICATION.md)
-- [Development stages](docs/ROADMAP.md)
+- [Review policy and semantics](docs/REVIEW-POLICY.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [Verification](docs/VERIFICATION.md)
+- [Roadmap](docs/ROADMAP.md)
+
+The existing preview remains private. GitHub Pages is not enabled or published in this stage.

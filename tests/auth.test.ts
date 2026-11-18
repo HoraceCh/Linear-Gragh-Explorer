@@ -58,17 +58,15 @@ describe("OAuth protection", () => {
     location.search = `?code=synthetic&state=${transaction.state}`;
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue({
-          ok: true,
-          json: async () => ({
-            access_token: "synthetic-only",
-            refresh_token: "synthetic-only",
-            scope: "read write",
-            expires_in: 3600,
-          }),
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          access_token: "synthetic-only",
+          refresh_token: "synthetic-only",
+          scope: "read write",
+          expires_in: 3600,
         }),
+      }),
     );
     await expect(auth.finishLogin()).rejects.toThrow("仅接受 read");
     await expect(auth.accessToken()).rejects.toThrow("连接");
@@ -80,17 +78,15 @@ describe("OAuth protection", () => {
     location.search = `?code=synthetic&state=${t.state}`;
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue({
-          ok: true,
-          json: async () => ({
-            access_token: "synthetic-only",
-            refresh_token: "synthetic-only",
-            scope: "read",
-            expires_in: 3600,
-          }),
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          access_token: "synthetic-only",
+          refresh_token: "synthetic-only",
+          scope: "read",
+          expires_in: 3600,
         }),
+      }),
     );
     expect(await auth.finishLogin()).toBe(true);
     expect(await auth.accessToken()).toBe("synthetic-only");
@@ -104,15 +100,79 @@ describe("OAuth protection", () => {
     const t = JSON.parse(sessionStorage.getItem("pvcr-oauth")!);
     location.search = `?code=synthetic&state=${t.state}`;
     let version = 0;
-    const fetchMock = vi.fn(async () => { version++; const v=version; return {ok:true,json:async()=>({access_token:`synthetic-access-${v}`,refresh_token:`synthetic-refresh-${v}`,scope:"read",expires_in:3600})}; });
-    vi.stubGlobal("fetch",fetchMock);
+    const fetchMock = vi.fn(async () => {
+      version++;
+      const v = version;
+      return {
+        ok: true,
+        json: async () => ({
+          access_token: `synthetic-access-${v}`,
+          refresh_token: `synthetic-refresh-${v}`,
+          scope: "read",
+          expires_in: 3600,
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
     await auth.finishLogin();
     await Promise.all([auth.renewSession(), auth.renewSession()]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(await auth.accessToken()).toBe("synthetic-access-2");
     await auth.renewSession();
-    expect(String((fetchMock.mock.calls as any)[2][1].body)).toContain("refresh_token=synthetic-refresh-2");
-    expect(String((fetchMock.mock.calls as any)[2][1].body)).not.toContain("client_secret");
+    expect(String((fetchMock.mock.calls as any)[2][1].body)).toContain(
+      "refresh_token=synthetic-refresh-2",
+    );
+    expect(String((fetchMock.mock.calls as any)[2][1].body)).not.toContain(
+      "client_secret",
+    );
   });
+  it("disconnect prevents an in-flight renewal from resurrecting credentials", async () => {
+    const auth = await import("../src/auth");
+    await auth.login("public-test-client");
+    const t = JSON.parse(sessionStorage.getItem("pvcr-oauth")!);
+    location.search = `?code=synthetic&state=${t.state}`;
+    const token = {
+      access_token: "synthetic-access",
+      refresh_token: "synthetic-refresh",
+      scope: "read",
+      expires_in: 3600,
+    };
+    let complete!: (v: any) => void;
+    const f = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => token })
+      .mockImplementationOnce(
+        () =>
+          new Promise((r) => {
+            complete = r;
+          }),
+      );
+    vi.stubGlobal("fetch", f);
+    await auth.finishLogin();
+    const renewal = auth.renewSession();
+    auth.disconnect();
+    complete({ ok: true, json: async () => token });
+    await expect(renewal).rejects.toThrow();
+    await expect(auth.accessToken()).rejects.toThrow("连接");
+  });
+});
 
+it("distinguishes a temporary refresh interruption from a revoked grant", async () => {
+  const auth = await import("../src/auth");
+  const { LinearAccessError } = await import("../src/team/access-error");
+  await auth.login("public-test-client");
+  const t = JSON.parse(sessionStorage.getItem("pvcr-oauth")!);
+  location.search = `?code=synthetic&state=${t.state}`;
+  const success = { ok: true, json: async () => ({
+    access_token: "test-a", refresh_token: "test-r", scope: "read", expires_in: 3600,
+  }) };
+  const provider = vi.fn().mockResolvedValueOnce(success)
+    .mockRejectedValueOnce(new TypeError("offline")).mockResolvedValueOnce(success)
+    .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({error: "invalid_grant"}) });
+  vi.stubGlobal("fetch", provider);
+  await auth.finishLogin();
+  await expect(auth.renewSession()).rejects.toThrow("offline");
+  await expect(auth.renewSession()).resolves.toBeUndefined();
+  await expect(auth.renewSession()).rejects.toBeInstanceOf(LinearAccessError);
+  await expect(auth.accessToken()).rejects.toThrow("请连接");
 });

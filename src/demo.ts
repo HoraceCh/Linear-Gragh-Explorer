@@ -1,11 +1,11 @@
-import { normalize, TEAM_KEY, type Item, type Link } from "./model";
+import { normalize, type Item, type Link } from "./model";
 export function demoGraph() {
   const items: Item[] = [
     {
       id: "demo-project",
       kind: "project",
       title: "示例 · 清洁机器人概念研究",
-      description: "完全合成的数据，用于体验图谱交互；不代表真实 PVCR 任务。",
+      description: "完全合成的数据，用于体验图谱交互；不代表真实团队 任务。",
     },
     { id: "demo-empty", kind: "project", title: "示例 · 空项目" },
   ];
@@ -39,7 +39,7 @@ export function demoGraph() {
     items.push({
       id: `i${i}`,
       kind: "issue",
-      teamId: TEAM_KEY,
+      teamId: "synthetic-team",
       identifier: `DEMO-${i + 1}`,
       title,
       description:
@@ -71,5 +71,39 @@ export function demoGraph() {
     kind: "blocks",
   }));
   links.push({ id: "related", source: "i3", target: "i4", kind: "related" });
-  return { ...normalize(items, links), source: "synthetic" as const };
+  return {
+    ...normalize(items, links, [], "synthetic-team"),
+    source: "synthetic" as const,
+  };
+}
+
+/** Reproducible synthetic visual benchmarks; never presented as synchronized data. */
+export function scaleGraph(count: 20 | 50 | 100) {
+  const base = demoGraph();
+  const items = base.items.filter((n) => n.kind !== "issue");
+  for (let i = 0; i < count; i++) items.push({
+    id: `scale-${i}`, kind: "issue", teamId: "synthetic-team",
+    identifier: `SCALE-${i + 1}`, title: `合成任务 ${i + 1} · 验证跨阶段协作与依赖`,
+    projectId: "demo-project", milestoneId: `m${Math.floor(i * 4 / count)}`,
+    assignee: `研究员 ${["A", "B", "C"][i % 3]}`, status: "待开始", statusType: "unstarted",
+  });
+  const total = count === 20 ? 100 : count === 50 ? 200 : 500;
+  const links: Link[] = [];
+  const add = (s: number, t: number, kind: "blocks" | "related") => links.push({
+    id: `${kind}-${s}-${t}`, source: `scale-${s}`, target: `scale-${t}`, kind,
+  });
+  const dependencyTarget = count === 100 ? 300 : count - 1;
+  outer: for (let distance = 1; distance < count; distance++) {
+    for (let s = 0; s + distance < count; s++) {
+      if (links.length >= dependencyTarget) break outer;
+      add(s, s + distance, "blocks");
+    }
+  }
+  outer: for (let distance = 2; distance < count; distance++) {
+    for (let s = 0; s + distance < count; s++) {
+      if (links.length >= total) break outer;
+      add(s, s + distance, "related");
+    }
+  }
+  return { ...normalize(items, links, [], "synthetic-team"), source: "synthetic" as const };
 }

@@ -1,5 +1,4 @@
-export const TEAM_KEY = "PVCR";
-export type Kind = "project" | "milestone" | "issue";
+export type Kind = "project" | "milestone" | "issue" | "boundary";
 export type LinkKind = "membership" | "parent" | "blocks" | "related";
 export interface Item {
   id: string;
@@ -17,6 +16,11 @@ export interface Item {
   statusType?: string;
   priority?: number;
   archived?: boolean;
+  assigneeId?: string;
+  stateId?: string;
+  labels?: string[];
+  updatedAt?: string;
+  dueDate?: string;
 }
 export interface Link {
   id: string;
@@ -30,6 +34,10 @@ export interface Graph {
   warnings: string[];
   syncedAt: string;
   source: "live" | "synthetic";
+  teamId?: string;
+  members?: { id: string; name: string }[];
+  states?: { id: string; name: string; type: string }[];
+  labels?: { id: string; name: string }[];
 }
 export const emptyGraph = (): Graph => ({
   items: [],
@@ -42,19 +50,42 @@ export function normalize(
   items: Item[],
   relations: Link[],
   warnings: string[] = [],
-  expectedTeamId: string = TEAM_KEY,
+  expectedTeamId: string,
 ): Graph {
-  const safe = items.filter((n) => n.kind !== "issue" || n.teamId === expectedTeamId),
+  const safe = items.filter(
+      (n) => n.kind !== "issue" || n.teamId === expectedTeamId,
+    ).map((item) => ({ ...item })),
     ids = new Set(safe.map((n) => n.id));
   const edges: Link[] = [];
+  const boundaries = new Map<string, string>();
+  const boundary = (id: string) => {
+    if (ids.has(id)) return id;
+    let alias = boundaries.get(id);
+    if (!alias) {
+      alias = `boundary:${boundaries.size + 1}`;
+      boundaries.set(id, alias);
+      safe.push({
+        id: alias,
+        kind: "boundary",
+        title: "外部或不可用引用（未展开）",
+      });
+      ids.add(alias);
+    }
+    return alias;
+  };
   const notes = [...warnings];
   const add = (source: string, target: string, kind: LinkKind) => {
     if (ids.has(source) && ids.has(target))
       edges.push({ id: `${kind}:${source}:${target}`, source, target, kind });
-    else
+    else {
+      if (kind !== "membership") {
+        const from = boundary(source), to = boundary(target);
+        edges.push({ id: `${kind}:${from}:${to}`, source: from, target: to, kind });
+      }
       notes.push(
         "存在不可用引用（可能已删除、权限变化或位于团队之外）；未展开读取。",
       );
+    }
   };
   for (const n of safe) {
     if (n.projectId && n.kind === "milestone")
@@ -64,6 +95,11 @@ export function normalize(
       else if (n.projectId) add(n.projectId, n.id, "membership");
       if (n.parentId) add(n.parentId, n.id, "parent");
     }
+  }
+  for (const n of safe) {
+    if (n.parentId && !ids.has(n.parentId)) n.parentId = boundaries.get(n.parentId);
+    if (n.projectId && !ids.has(n.projectId)) n.projectId = undefined;
+    if (n.milestoneId && !ids.has(n.milestoneId)) n.milestoneId = undefined;
   }
   for (const e of relations) add(e.source, e.target, e.kind);
   return {
