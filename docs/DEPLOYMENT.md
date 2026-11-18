@@ -52,3 +52,12 @@ Returning to a production tab triggers a rate-limited, uncached same-origin chec
 ## v0.3.x
 
 主要托管目标使用 [Vercel 部署流程](VERCEL-DEPLOYMENT.md)。Pages 保留手动备用构建。跨 Workspace 也可由已获相应工作区授权的 Public OAuth App 接入。
+
+
+## v0.3.3 three-target intent
+
+- **Vercel:** intended primary production host. Keep the existing protected Preview protected; production publication requires a separately approved hostname and an exact Linear OAuth callback.
+- **GitHub Pages:** intended public fallback. Keep the manual workflow disabled until the real Pages URL, Linear callback and repository variables are verified. Publishing Pages does not promote Vercel.
+- **Existing ChatGPT Site:** owner-private development and preview only. Keep it private and do not create a second Site. It is not the shared production URL for the team.
+
+Each origin has its own OAuth redirect URI, browser storage, cache and session. Test each independently with a fresh profile, reload and graph-worker request. Never publish OAuth tokens, real issue snapshots, private profile exports or team member IDs.
