@@ -18,3 +18,15 @@ esbuild 来自 lockfile 固定的 npm 包，install.js 检查本机平台的可�
 ## v0.3.2
 
 v0.3.2 保留原依赖版本。本轮 npm ci 和 npm ls --all 后，完整审计仍列出 5 High，omit=dev 为零。公开 Pages workflow 在上传前执行完整 High 门禁。
+
+
+## v0.3.3 · CVE-2026-112366 recheck (2026-11-18)
+
+The current GitHub-reviewed advisory identifies picomatch versions through 4.0.7 as affected and lists no patched version. The NVD record likewise identifies the affected range through 4.0.7. Secondary sources have conflicting claims about a 4.0.8 fix; do not override the primary GitHub advisory or assume a fixed release until the upstream package and advisory are updated and the patch is verified.
+
+- Production dependency audit is now an explicit CI step: `npm audit --omit=dev --audit-level=high`.
+- The manual GitHub Pages release workflow retains the full `npm audit --audit-level=high` gate. It therefore remains blocked while the development-tool advisory is reported as High.
+- Do not suppress the finding or pin to an unofficial fork for the purpose of making a release green.
+- Re-run the full audit against the exact release lockfile before Vercel Production or Pages publication.
+
+Primary sources: [GitHub advisory GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf), [NVD CVE-2026-112366](https://nvd.nist.gov/vuln/detail/CVE-2026-112366).
