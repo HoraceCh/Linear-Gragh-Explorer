@@ -32,6 +32,7 @@ export interface ReviewResult {
   }[];
   boundary?: string;
   warning?: string;
+  ignored?: Record<string, number>;
 }
 export const reviewLabels: Record<ReviewStatus, string> = {
   "Not Configured": "未配置",
@@ -46,6 +47,11 @@ export function parseMarker(
   body: string,
   markers: ReviewPolicy["markers"],
 ): Decision | null {
+  const commands: Record<string, Decision> = {
+    APPROVED: "approve", "APPROVED WITH COMMENTS": "approve",
+    "REQUEST CHANGES": "requestChanges", "CHANGES REQUESTED": "requestChanges",
+    HOLD: "hold", "ON HOLD": "hold",
+  };
   let fence: { char: string; length: number } | null = null;
   const found: Decision[] = [];
   let html = false;
@@ -69,6 +75,8 @@ export function parseMarker(
       continue;
     }
     if (/^( {4}|\t)/.test(raw)) continue;
+    const line = raw.trim().toUpperCase();
+    if (Object.hasOwn(commands, line)) found.push(commands[line]);
     for (const d of ["approve", "requestChanges", "hold"] as Decision[])
       if (raw.trim().toUpperCase() === markers[d].toUpperCase()) found.push(d);
   }
@@ -116,7 +124,7 @@ export function calculateReview(
     !policy.inReviewStateIds.includes(currentStateId)
   ) {
     result.status = "Verification Required";
-    result.warning =
+    result.warning = currentStateId && !policy.inReviewStateIds.includes(currentStateId) ? "任务当前不在配置的入审状态。" :
       "无法确认当前 In Review 轮次；历史批准不能作为本轮通过依据。";
     return result;
   }
@@ -124,23 +132,26 @@ export function calculateReview(
   if (policy.excludeAssignee && assigneeId) eligible.delete(assigneeId);
   const latest = new Map<string, ReviewResult["decisions"][number]>();
   for (const c of [...comments].sort((a, b) => a.id.localeCompare(b.id))) {
-    if (
-      c.inline ||
-      !c.user ||
-      !eligible.has(c.user.id) ||
-      !Number.isFinite(Date.parse(c.createdAt)) ||
-      Date.parse(c.createdAt) <= Date.parse(boundary)
-    )
-      continue;
-    const d = parseMarker(c.body, policy.markers);
+    const decision = parseMarker(c.body, policy.markers);
     const at = Date.parse(c.updatedAt || c.createdAt);
-    if (!d || !Number.isFinite(at)) continue;
+    let reason: string | undefined;
+    if (c.inline) reason = "行内评论";
+    else if (!c.user || !eligible.has(c.user.id)) reason = "作者不具备审阅资格";
+    else if (!Number.isFinite(Date.parse(c.createdAt)) || !Number.isFinite(at)) reason = "评论时间无效";
+    else if (Date.parse(c.createdAt) <= Date.parse(boundary)) reason = "评论早于本轮或位于边界";
+    else if (!decision) reason = "未找到唯一明确的决定";
+    if (reason) {
+      result.ignored ??= {};
+      result.ignored[reason] = (result.ignored[reason] || 0) + 1;
+      continue;
+    }
+    if (!decision || !c.user) continue;
     const old = latest.get(c.user.id);
     if (!old || at >= Date.parse(old.at))
       latest.set(c.user.id, {
         reviewerId: c.user.id,
         name: c.user.name,
-        decision: d,
+        decision,
         at: c.updatedAt || c.createdAt,
         excerpt: c.body.slice(0, 400),
         url: c.url,

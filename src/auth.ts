@@ -21,13 +21,14 @@ export const configuredClient = () =>
   "";
 export const callbackUrl = () => location.origin + location.pathname;
 export function callbackAllowed(current: string, registered: string | undefined, vercel: boolean) {
-  if (!registered) return !vercel;
+  const host = new URL(current).hostname;
+  if (!registered) return !vercel && !host.endsWith(".github.io") && !host.endsWith(".vercel.app");
   try {
     const url = new URL(registered);
-    return url.href === current && !url.search && !url.hash && url.protocol === "https:";
+    return registered === current && url.href === current && !url.username && !url.password && !url.search && !url.hash && url.protocol === "https:";
   } catch { return false; }
 }
-export const liveOAuthAllowed = () => callbackAllowed(callbackUrl(), import.meta.env.VITE_LINEAR_REDIRECT_URI, import.meta.env.VITE_VERCEL_HOSTED === "true" || new URL(callbackUrl()).hostname.endsWith(".vercel.app"));
+export const liveOAuthAllowed = () => callbackAllowed(callbackUrl(), import.meta.env.VITE_LINEAR_REDIRECT_URI, import.meta.env.VITE_VERCEL_HOSTED === "true" || import.meta.env.VITE_DEPLOY_TARGET === "pages");
 export async function login(clientId: string) {
   if (!liveOAuthAllowed()) throw new Error("此地址未配置固定 OAuth 回调，请使用合成演示或已注册的稳定入口。");
   if (!clientId.trim()) throw new Error("请先配置公开 OAuth Client ID。");

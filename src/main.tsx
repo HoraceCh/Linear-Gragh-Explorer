@@ -1,3 +1,4 @@
+import { ProjectExplorer } from "./components/ProjectExplorer";
 import { BuildUpdate } from "./components/BuildUpdate";
 import { version } from "../package.json";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -238,7 +239,7 @@ function App() {
   const diagnostics = useMemo(() => analyze(graph), [graph]),
     summary = useMemo(() => summarize(graph.items), [graph]);
   const reviewResult = (n: Item): ReviewResult =>
-    reviews[n.id] || calculateReview(profile.reviewPolicy, n.assigneeId, []);
+    reviews[n.id] || calculateReview(profile.reviewPolicy, n.assigneeId, [], undefined, n.stateId);
   const workstreams = (n: Item) => {
     const values = (n.labels || [])
       .map((id) => profile.workstreamLabelMap[id])
@@ -278,7 +279,7 @@ function App() {
     [graph, filter, archived, completed, profile, reviews],
   );
   const queue = visible.filter(n =>
-    (!profile.reviewPolicy?.enabled || profile.reviewPolicy.inReviewStateIds.includes(n.stateId || "")) &&
+    (profile.reviewPolicy?.enabled && profile.reviewPolicy.inReviewStateIds.includes(n.stateId || "")) &&
     `${n.identifier} ${n.title}`.toLowerCase().includes(query.trim().toLowerCase())
   );
   const matchesSearch = (n: Item) => `${n.identifier} ${n.title}`.toLowerCase().includes(query.trim().toLowerCase());
@@ -414,7 +415,7 @@ function App() {
               aria-current={mode === id ? "page" : undefined}
               title={label}
               className={mode === id ? "active" : ""}
-              onClick={() => setMode(id)}
+              onClick={() => { if (id === "project") resetFilters(); setMode(id); }}
             >
               <Icon size={18} />
               {label}
@@ -427,8 +428,8 @@ function App() {
             <button
               key={p.id}
               onClick={() => {
-                updateFilter("project", p.id);
-                setMode("hierarchy");
+                resetFilters(); updateFilter("project", p.id);
+                setMode("project");
               }}
             >
               {p.title}
@@ -621,7 +622,9 @@ function App() {
                   </div></details>
                 </div>
               )}
-              {(mode === "overview" || mode === "project") && (
+              {mode === "project" && <ProjectExplorer key={JSON.stringify([team?.id,filter.project])} projects={projects} milestones={milestones} issues={issues}
+                blocked={diagnostics.blocked} projectId={filter.project} open={select} choose={id=>updateFilter("project",id)} explore={setMode} />}
+              {mode === "overview" && (
                 <>
                   <div className="stats">
                     {[
@@ -632,7 +635,7 @@ function App() {
                     ].map(([n, label, subset]) => (
                       <button className="stat" key={label} onClick={() => {
                         resetFilters();
-                        if (subset === "projects") {document.getElementById("project-list")?.scrollIntoView(); return;}
+                        if (subset === "projects") {setMode("project"); return;}
                         setFilter({...initialFilters, subset: String(subset)});
                         setMode("hierarchy");
                       }}>
@@ -745,8 +748,8 @@ function App() {
                           className="project-card"
                           key={p.id}
                           onClick={() => {
-                            updateFilter("project", p.id);
-                            setMode("hierarchy");
+                            resetFilters(); updateFilter("project", p.id);
+                            setMode("project");
                           }}
                         >
                           <FolderOpen size={23} />
@@ -940,7 +943,7 @@ function App() {
                       {reviewBusy ? "读取中…" : "刷新筛选任务的审阅"}
                     </button>
                     <span>
-                      按当前账号在本浏览器配置的审阅策略计算 · 当前入审状态的任务 · {queue.length} 项
+                      按当前账号在本浏览器配置的审阅策略计算 · 当前筛选 {queue.length} 项 · 待完成审阅 {queue.filter(n => reviewResult(n).status !== "Review Passed").length} 项
                     </span>
                   </div>
                   {reviewError && (
@@ -966,7 +969,7 @@ function App() {
                             </small>
                             <strong>{n.title}</strong>
                             {profile.reviewPolicy?.enabled && reviews[n.id]?.boundary && <small>
-                              待表态：{profile.reviewPolicy.eligibleReviewerIds.filter(id =>
+                              已表态：{reviews[n.id].decisions.map(d => d.name).join("、") || "无"} · 待表态：{profile.reviewPolicy.eligibleReviewerIds.filter(id =>
                                 !(profile.reviewPolicy?.excludeAssignee && id === n.assigneeId) &&
                                 !reviews[n.id].decisions.some(d => d.reviewerId === id)
                               ).map(id => graph.members?.find(m => m.id === id)?.name || "成员").join("、") || "无"}
@@ -1083,6 +1086,7 @@ function App() {
             </div>
             </details><details open key={selected.id + "-review"}><summary>审阅证据</summary>
             {reviewError && <p role="alert">{reviewError}</p>}
+            {reviewResult(selected).ignored && Object.entries(reviewResult(selected).ignored || {}).map(([reason,count]) => <p key={reason}>{reason} · {count}</p>)}
             {reviewResult(selected).warning && (
               <p>{reviewResult(selected).warning}</p>
             )}

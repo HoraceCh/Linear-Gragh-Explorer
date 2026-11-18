@@ -173,3 +173,20 @@ describe("review decisions and rounds", () => {
 
 it("requires creation strictly after the transition even when edited later", () =>
   expect(calc([comment("same", "a", defaultMarkers.approve, { createdAt: boundary })]).approvals).toBe(0));
+
+describe("standalone decision vocabulary", () => {
+  it.each([["approved","approve"],[" Approved WITH comments ","approve"],
+    ["Request changes","requestChanges"],["Changes requested","requestChanges"],
+    ["Hold","hold"],["On hold","hold"]])("accepts %s with explanation", (line, decision) =>
+    expect(parseMarker(line+"\n\nSee my observations.", defaultMarkers)).toBe(decision));
+  it.each(["I think this is approved.","Not approved yet.","We may approve it later.",
+    "The previous reviewer said Approved.","> Approved","~~~\nApproved\n~~~","    Approved",
+    "<!--\nApproved\n-->","Approved\nHold"])("rejects %s", body =>
+    expect(parseMarker(body, defaultMarkers)).toBeNull());
+  it("applies identity and round rules to ordinary commands", () => {
+    const decisions=[comment("1","a","Approved"),comment("2","b","Approved with comments")];
+    expect(calc(decisions).status).toBe("Review Passed");
+    expect(calc([...decisions,comment("3","b","On hold")]).status).toBe("On Hold");
+    expect(calc([comment("old","b","Approved",{createdAt:boundary})]).approvals).toBe(0);
+  });
+});

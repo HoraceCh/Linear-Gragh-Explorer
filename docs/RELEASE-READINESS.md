@@ -25,3 +25,7 @@ Public v0.2 baseline audited from PR #1: `8125c7f893bbff5df8ee88e7304044dfc9d7b6
 保护预览须分别验收别名和部署 URL。内部真实使用须验证稳定 OAuth 回调。合并须审核候选 SHA 与 CI。公开发布另需负责人批准、真实账号权限验证和可恢复部署记录。参考 [多用户验收](MULTI-USER-ACCEPTANCE.md) 与 [回滚](ROLLBACK.md)。
 
 公开发布还须通过完整构建依赖审计。当前 picomatch 的 High 记录与验证范围见 [依赖安全记录](DEPENDENCY-SECURITY.md)。
+
+## v0.3.2
+
+公开双目标上线仍受构建依赖 High、Pages 正式域名与 OAuth 实测、真实双审阅及区域访问验收约束。分支 CI 只验证构建产物。Pages 发布必须由所有者另行批准。

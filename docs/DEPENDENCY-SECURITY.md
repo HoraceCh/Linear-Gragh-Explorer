@@ -14,3 +14,7 @@
 修复后完整审计为 5 High、0 Critical，均通过同一 glob 公告传播。生产依赖审计为 0。Playwright 1.65.1、React Flow 12.12.1、ELKjs 0.11.1 与 esbuild 0.28.2 未收到此次直接告警。未知漏洞与后续公告不在上述计数中。
 
 esbuild 来自 lockfile 固定的 npm 包，install.js 检查本机平台的可选二进制依赖、验证版本，缺少时包含下载回退。本环境保留标准平台依赖后，使用 npm ci --ignore-scripts 可以构建。维持现有脚本许可，不为其他包开启脚本。公开发布前重新执行完整审计，处置尚存的构建链 High。
+
+## v0.3.2
+
+v0.3.2 保留原依赖版本。本轮 npm ci 和 npm ls --all 后，完整审计仍列出 5 High，omit=dev 为零。公开 Pages workflow 在上传前执行完整 High 门禁。

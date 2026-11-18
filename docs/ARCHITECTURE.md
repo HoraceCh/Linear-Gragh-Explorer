@@ -50,3 +50,7 @@ The compact filters and dashboard drill-down share the same criteria. Current re
 ## v0.3.x
 
 v0.3.1 在同步前查询 viewer.id 与 viewer.organization.id，以两者和 Team ID 划分配置。应用和 ELK 继续运行在浏览器。详细边界见 [OAuth 安全](OAUTH-SECURITY.md)。
+
+## v0.3.2
+
+项目索引与工作区复用当前团队的一份规范化快照。选择项目、搜索、打开任务均在浏览器执行。图谱滚轮根据像素、行或页归一化后以指针为中心更新视口，中键拖动仅作用于画布。

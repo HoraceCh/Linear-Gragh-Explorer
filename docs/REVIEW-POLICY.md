@@ -10,13 +10,13 @@ Explanation of the review.
 
 Other defaults: `[REVIEW: REQUEST_CHANGES]` and `[REVIEW: HOLD]`.
 
-A marker must be a standalone line and is recognized case-insensitively. Quoted lines, fenced code, indented code, HTML comments, inline-description threads and ordinary natural-language approvals are ignored. Conflicting marker types in one comment are ambiguous and do not count. Marker spellings can be configured, but must remain distinct bracketed REVIEW markers.
+A marker must be a standalone line and is recognized case-insensitively. Quoted lines, fenced code, indented code, HTML comments, inline-description threads and ordinary prose are ignored. Conflicting marker types in one comment are ambiguous and do not count. Marker spellings can be configured, but must remain distinct bracketed REVIEW markers.
 
 ## Configure
 
 Select a team, open Team Configuration, enable review analysis, select actual team member IDs, set the required approval count, choose actual In Review state IDs, and normally exclude the assignee. An empty eligibility list authorizes nobody. Review rules are optional. Roles and display names do not grant reviewer authority.
 
-Profiles are local to this browser and keyed by team ID. JSON export contains private member/label configuration IDs, never task snapshots or tokens. Do not publish exported profiles. Import validates the team binding and discards unknown fields. Reset removes the configured policy after saving defaults.
+Profiles are local to this browser and keyed by workspace, viewer and team IDs. JSON export contains private member/label configuration IDs, never task snapshots or tokens. Do not publish exported profiles. Import validates the team binding and discards unknown fields. Reset removes the configured policy after saving defaults.
 
 ## Current round
 
@@ -43,3 +43,13 @@ In Review tasks load first. Other task reviews load on demand from details or ex
 Candidate checks scope each comment, reply and history request by both issue and team on Linear. The history read supplies the current state and assignee for the calculation. An issue moving teams aborts the read. Replies with missing ancestry and decisions created at the exact transition timestamp are excluded. A thread with no children needs no separate reply query.
 
 Real two-reviewer approval acceptance pending external evidence. A qualifying sample requires two distinct eligible reviewer IDs posting valid decisions after the same verified transition.
+
+## v0.3.2 独立行命令
+
+| 决定 | 默认命令 |
+| --- | --- |
+| 批准 | Approved、Approved with comments、[REVIEW: APPROVE] |
+| 要求修改 | Request changes、Changes requested、[REVIEW: REQUEST_CHANGES] |
+| 暂缓 | Hold、On hold、[REVIEW: HOLD] |
+
+大小写不限，说明可另起一行。代码、引用、行内讨论、存在相互冲突决定的整条评论均不计入。审阅详情按原因统计忽略项，显示本轮每位有效审阅人的最新决定。手动刷新重新读取评论和历史。入审前创建的评论在本轮编辑仍然不计入。Real two-reviewer approval acceptance pending external evidence

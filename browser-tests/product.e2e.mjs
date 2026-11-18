@@ -8,6 +8,24 @@ for (const width of [375, 390, 768, 1280, 1440]) {
       const activate = locator => width < 800 ? locator.tap() : locator.click();
       await page.goto("./");
       await activate(button("体验合成演示"));
+      await expect(page.getByRole("region",{name:"项目索引"})).toHaveCount(0);
+      await activate(button("项目探索"));
+      const index = page.getByRole("region",{name:"项目索引"});
+      await expect(index).toBeVisible();
+      await index.getByLabel("搜索项目").fill("no-project-ever");
+      await expect(index.getByText("没有匹配项目。")).toBeVisible();
+      await index.getByLabel("搜索项目").fill("");
+      await activate(index.locator(".project-card").first());
+      const workspace = page.getByRole("region",{name:"项目工作区"});
+      await workspace.getByLabel("搜索项目任务").fill("no-match-ever");
+      await expect(workspace.getByText("当前没有匹配任务。")).toBeVisible();
+      await workspace.getByLabel("搜索项目任务").fill("");
+      await activate(workspace.locator(".task-row").first());
+      await activate(button("关闭详情"));
+      await activate(button("返回项目索引"));
+      await expect(index).toBeVisible();
+      await activate(button("团队总览"));
+      await expect(index).toHaveCount(0);
       await activate(button("团队配置"));
       await expect(page.getByRole("dialog")).toBeVisible();
       await page.keyboard.press("Escape");
@@ -89,4 +107,41 @@ test.describe("touch graph", () => {
       await expect.poll(transform).toBeGreaterThan(initial);
     } finally { await session.detach(); }
   });
+});
+
+test("wheel anchors zoom at cursor and middle drag pans only the canvas", async ({page}) => {
+  await page.emulateMedia({reducedMotion:"reduce"});
+  await page.goto("./");
+  const button = name => page.getByRole("button",{name,exact:true});
+  await button("体验合成演示").click();
+  await button("依赖视图").click();
+  await expect(button("适应全图")).toBeEnabled();
+  const pane = page.locator(".react-flow__pane");
+  await pane.scrollIntoViewIfNeeded();
+  const box = await pane.boundingBox();
+  const x = Math.round(box.x+box.width*.63), y = Math.round(box.y+box.height*.42);
+  const read = () => page.locator(".react-flow__viewport").evaluate(el=>{
+    const m = new DOMMatrix(getComputedStyle(el).transform);
+    return {z:m.a,x:m.e,y:m.f,scroll:scrollY};
+  });
+  await page.mouse.move(x,y);
+  const before=await read();
+  await page.mouse.wheel(0,100);
+  await expect.poll(async()=>(await read()).z/before.z).toBeLessThan(.95);
+  const zoomed=await read(), ratio=zoomed.z/before.z;
+  expect(ratio).toBeGreaterThan(.92);
+  expect(Math.abs(zoomed.x-(x-box.x+(before.x-x+box.x)*ratio))).toBeLessThan(2);
+  expect(Math.abs(zoomed.y-(y-box.y+(before.y-y+box.y)*ratio))).toBeLessThan(2);
+  await page.mouse.down({button:"middle"});
+  await page.mouse.move(x+45,y+30,{steps:5});
+  await page.mouse.up({button:"middle"});
+  const panned=await read();
+  expect(panned.x-zoomed.x).toBeCloseTo(45,0);
+  expect(panned.y-zoomed.y).toBeCloseTo(30,0);
+  expect(panned.scroll).toBe(before.scroll);
+  await button("适应全图").click();
+  await page.getByLabel("小地图").check();
+  await expect(page.locator(".react-flow__minimap")).toBeVisible();
+  await page.locator(".react-flow__node").first().click();
+  await expect(button("关闭详情")).toBeVisible();
 });

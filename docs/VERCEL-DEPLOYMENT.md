@@ -12,3 +12,7 @@ GitHub 是唯一源码来源。现有私有 Site 保留开发用途。Vercel 使
 本次未启用 Pages。Vercel 当前套餐及线上设置以控制台和实际匿名访问结果为准。
 
 从 Git source 选择仓库、release 分支和完整 SHA，创建部署时省略 target。保留 Production ignore gate。创建后核对项目、分支、meta.githubCommitSha、readyState、target、别名归属；本项目已观察到 Preview 的 API target 为 null。遇到 production 或身份不匹配即停止。用匿名 GET 检查入口及本次构建日志中的每个哈希资源，再用有权访问的浏览器打开分支别名。
+
+## v0.3.2
+
+Vercel 保持根路径、稳定分支回调、受保护 Preview 与 Production ignore gate。项目 Node major 与仓库 .nvmrc 对齐为 26。Pages 的发布批准和回调独立管理。

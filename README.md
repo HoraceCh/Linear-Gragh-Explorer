@@ -62,3 +62,7 @@ See [UX audit](docs/UX-AUDIT.md), [performance measurements](docs/PERFORMANCE.md
 v0.3.1 候选版支持 Vercel 根目录与 Pages 子路径构建。逐用户配置与发布门禁见 [Vercel 部署](docs/VERCEL-DEPLOYMENT.md) 和 [OAuth 安全](docs/OAUTH-SECURITY.md)。
 
 候选版依赖审计及待修项见 [依赖安全记录](docs/DEPENDENCY-SECURITY.md)。
+
+## v0.3.2
+
+团队总览展示全队进度、阻塞和分工。项目探索提供可搜索的项目索引，在项目内按里程碑浏览、筛选任务或进入该项目的依赖图。部署见 [双目标部署](docs/DUAL-DEPLOYMENT.md)。

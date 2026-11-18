@@ -5,22 +5,33 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: root
+            base: /
+          - target: pages
+            base: /Linear-Gragh-Explorer/
+    env:
+      VITE_BASE_PATH: ${{ matrix.base }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
+      - run: node --version && npm --version
       - run: npm ci
       - run: npm test
       - run: node --test scripts/validate-pages.checks.mjs
-      - run: npm run build
+      - run: node scripts/validate-host-config.mjs && npm run build
         env:
-          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_DEPLOY_TARGET: ${{ matrix.target }}
+          VITE_LINEAR_CLIENT_ID: ci-fixture
+          VITE_LINEAR_REDIRECT_URI: https://ci.example.test${{ matrix.base }}
       - run: node scripts/validate-pages.mjs dist "$VITE_BASE_PATH"
-        env:
-          VITE_BASE_PATH: /${{ github.event.repository.name }}/
-      - run: npm run build
-      - run: node scripts/validate-pages.mjs dist /
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
+        env:
+          E2E_CALLBACK_URL: https://ci.example.test${{ matrix.base }}

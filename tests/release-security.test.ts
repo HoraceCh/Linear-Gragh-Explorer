@@ -38,3 +38,10 @@ test("hosted OAuth only accepts an exact registered HTTPS entry", () => {
     expect(callbackAllowed(current,stable,true)).toBe(false);
   expect(callbackAllowed(stable,undefined,true)).toBe(false);
 });
+
+test("Pages requires the exact registered project path including the slash", () => {
+  const entry = "https://demo.github.io/example/";
+  expect(callbackAllowed(entry, undefined, false)).toBe(false);
+  expect(callbackAllowed(entry, entry.slice(0,-1), false)).toBe(false);
+  expect(callbackAllowed(entry, entry, false)).toBe(true);
+});

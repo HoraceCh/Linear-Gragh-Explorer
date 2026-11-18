@@ -4,12 +4,19 @@ test("independent browser sessions and account replacement use their own bearer"
   const first = await browser.newContext();
   const second = await browser.newContext();
   async function connect(page, user) {
-    const root = new URL("/", baseURL).href;
+    const root = process.env.E2E_CALLBACK_URL || new URL("./", baseURL).href;
+    await page.unrouteAll({behavior:"wait"});
+    if (process.env.E2E_CALLBACK_URL) {
+      await page.route(new URL(root).origin + "/**", async route => {
+        const requested = new URL(route.request().url());
+        const response = await route.fetch({ url: new URL(requested.pathname + requested.search, baseURL).href });
+        await route.fulfill({response});
+      });
+    }
     await page.goto(root);
     await page.evaluate(({ root, user }) => sessionStorage.setItem("pvcr-oauth", JSON.stringify({
       verifier: "synthetic-verifier", state: user, clientId: "synthetic-client", created: Date.now(), redirect: root
     })), { root, user });
-    await page.unrouteAll({behavior:"wait"});
     await page.route("https://api.linear.app/oauth/token", route => route.fulfill({json:{
       scope:"read", expires_in:3600, access_token:"fixture-"+user, refresh_token:"renew-"+user
     }}));
