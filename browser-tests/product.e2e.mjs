@@ -22,7 +22,8 @@ for (const width of [375, 390, 768, 1280, 1440]) {
       await activate(page.locator(".tree-title").first());
       await expect(button("关闭详情")).toBeVisible();
       await activate(button("关闭详情"));
-      expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      const overflow = await page.evaluate(() => [...document.querySelectorAll("body *")].filter(e => e.getBoundingClientRect().right > innerWidth + 1).map(e => e.tagName + "." + e.className).slice(0,8));
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth), overflow.join(", ")).toBeLessThanOrEqual(width);
     });
   });
 }
@@ -35,7 +36,8 @@ test("synthetic layout, search and selection in Chromium", async ({page}) => {
   for (const count of [20,50,100,200]) {
     const start = await page.evaluate(()=>performance.now());
     await button(`${count} 节点压力图`).click();
-    await expect(page.getByText(new RegExp(`^${count} 节点 · [0-9]+ 条可见关系$`))).toBeVisible({timeout:30000});
+    await expect(page.getByRole("status")).toHaveText(new RegExp(`^${count} 节点 · [0-9]+ 条可见关系\\s*$`), {timeout:30000});
+    await expect(button("适应全图")).toBeEnabled();
     await page.locator(".react-flow__node").first().waitFor();
     const elapsed = await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(performance.now())))));
     console.log(`browser fixture-to-layout-and-paint ${count}: ${Math.round(elapsed-start)} ms`);
