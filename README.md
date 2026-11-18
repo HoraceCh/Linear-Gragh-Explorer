@@ -1,4 +1,4 @@
-# Linear Graph Explorer · v0.2.0
+# Linear Graph Explorer · v0.3.0
 
 Read-only task graphs and review intelligence for any team accessible to your Linear identity in the connected workspace. React, TypeScript, Vite, React Flow and ELKjs. MIT licensed.
 
@@ -50,3 +50,9 @@ ELK routes are rendered for ungrouped dependency topology. Grouped combined view
 - [Roadmap](docs/ROADMAP.md)
 
 The existing preview remains private. GitHub Pages is not enabled or published in this stage.
+
+## v0.3 product-quality preview
+
+The overview links into filtered work, the configured queue shows current review candidates, and graph controls distinguish a readable starting position from a whole-graph fit. Open **更多筛选** for secondary filters. Use **团队配置** to edit this browser’s team-specific policy.
+
+See [UX audit](docs/UX-AUDIT.md), [performance measurements](docs/PERFORMANCE.md), and [release readiness](docs/RELEASE-READINESS.md). Run the synthetic browser suite after building with `npx playwright install chromium` and `npm run test:browser`.

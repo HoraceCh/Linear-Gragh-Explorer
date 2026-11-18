@@ -42,3 +42,7 @@ All private screenshot evidence stays outside the public repository. Public fixt
 The baseline lockfile installed cleanly on Node 24. All 88 original checks and the production build passed. The private version and PR contained identical public tracked files. Read-only checks on two differently configured teams confirmed switching cleared prior content. The current real review round had zero qualifying decisions from two configured reviewers. Real two-reviewer approval acceptance pending external evidence.
 
 Stabilization adds coverage for current assignee/state during review, ambiguous timestamps, removed or moved items, profile validation, anonymous references, transport denial and refresh recovery. Provider denial invalidates in-memory team data. Transient network failure preserves the previous complete snapshot. Actual revoked and access-denied identities remain outstanding.
+
+## Product-quality candidate
+
+RC verification passed 101 Vitest checks. The v0.3 candidate adds fixture, viewport and worker lifecycle checks, eight Pages artifact checks and production Chromium tests for responsive navigation, dialog focus, filters, details and dense graph selection. CI runs Chromium independently of private identity. See the current PR checks for browser outcomes.

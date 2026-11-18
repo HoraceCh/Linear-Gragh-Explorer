@@ -78,21 +78,41 @@ export function demoGraph() {
 }
 
 /** Reproducible synthetic visual benchmarks; never presented as synchronized data. */
-export function scaleGraph(count: 20 | 50 | 100) {
+export function scaleGraph(count: 20 | 50 | 100 | 200) {
   const base = demoGraph();
   const items = base.items.filter((n) => n.kind !== "issue");
-  for (let i = 0; i < count; i++) items.push({
-    id: `scale-${i}`, kind: "issue", teamId: "synthetic-team",
-    identifier: `SCALE-${i + 1}`, title: `合成任务 ${i + 1} · 验证跨阶段协作与依赖`,
-    projectId: "demo-project", milestoneId: `m${Math.floor(i * 4 / count)}`,
-    assignee: `研究员 ${["A", "B", "C"][i % 3]}`, status: "待开始", statusType: "unstarted",
-  });
-  const total = count === 20 ? 100 : count === 50 ? 200 : 500;
+  if (count === 200) {
+    for (let project = 1; project < 4; project++) {
+      const projectId = `scale-project-${project}`;
+      items.push({ id: projectId, kind: "project", title: `合成项目 ${project + 1}` });
+      for (let stage = 0; stage < 4; stage++) {
+        items.push({ id: `${projectId}-m${stage}`, kind: "milestone", projectId, title: `阶段 ${stage + 1}` });
+      }
+    }
+  }
+  for (let i = 0; i < count; i++) {
+    const project = count === 200 ? Math.floor(i / 50) : 0;
+    const projectId = project ? `scale-project-${project}` : "demo-project";
+    const stage = count === 200 ? i % 4 : Math.floor(i * 4 / count);
+    items.push({
+      id: `scale-${i}`,
+      kind: "issue",
+      teamId: "synthetic-team",
+      identifier: `SCALE-${i + 1}`,
+      title: `合成任务 ${i + 1} · 验证跨阶段协作与依赖`,
+      projectId,
+      milestoneId: project ? `${projectId}-m${stage}` : `m${stage}`,
+      assignee: `研究员 ${["A", "B", "C"][i % 3]}`,
+      status: "待开始",
+      statusType: "unstarted",
+    });
+  }
+  const total = { 20: 100, 50: 200, 100: 500, 200: 800 }[count];
   const links: Link[] = [];
   const add = (s: number, t: number, kind: "blocks" | "related") => links.push({
     id: `${kind}-${s}-${t}`, source: `scale-${s}`, target: `scale-${t}`, kind,
   });
-  const dependencyTarget = count === 100 ? 300 : count - 1;
+  const dependencyTarget = count >= 100 ? count * 3 : count - 1;
   outer: for (let distance = 1; distance < count; distance++) {
     for (let s = 0; s + distance < count; s++) {
       if (links.length >= dependencyTarget) break outer;

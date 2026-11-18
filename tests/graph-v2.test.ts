@@ -145,3 +145,12 @@ it.each([20, 50, 100])(
   },
   15000,
 );
+
+it("shows an anonymous endpoint only when its relationship type is visible", () => {
+  const task = {id:"local", kind:"issue" as const, title:"Local"};
+  const boundary = {id:"boundary:1", kind:"boundary" as const, title:"External"};
+  const graph = {items:[task,boundary], links:[{id:"r",source:task.id,target:boundary.id,kind:"related" as const}],warnings:[],syncedAt:"",source:"synthetic" as const};
+  const visibility = {blocks:true, parent:false, related:false, grouping:false};
+  expect(graphProjection(graph,[task],"dependency",visibility).nodes).toEqual([task]);
+  expect(graphProjection(graph,[task],"combined",{...visibility,related:true}).nodes).toEqual([task,boundary]);
+});

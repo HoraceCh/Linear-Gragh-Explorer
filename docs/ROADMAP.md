@@ -16,3 +16,7 @@
 - [x] Existing owner-private preview deployment and sanitized feature-branch PR/CI.
 
 Release decisions remain explicit: no Linear writes, no shared credentials, no new backend, no Pages publication. A future shared profile service and multi-workspace sessions are separate releases.
+
+## v0.3
+
+Implemented actionable overview counts, compact filters, current-state queue, grouped evidence, accessible modal navigation, cancelable layout and viewport controls. Added 200/800 performance fixtures, Chromium acceptance and manual Pages artifact validation. Outstanding: real marked round, real denied identity, physical device accessibility and public-origin callback, conditioned on explicit release approval.

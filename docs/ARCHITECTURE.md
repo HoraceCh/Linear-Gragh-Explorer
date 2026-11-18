@@ -42,3 +42,7 @@ Grouped combined view uses milestone/project lanes with separate endpoint curves
 ## Security
 
 No GraphQL mutations, shared tokens, secret-backed bypasses, external telemetry or HTML rendering of comments. React escapes task/comment text. The private hosting boundary is separate from Linear data authorization. Tokens remain in memory; OAuth transaction storage is short-lived. Local profiles are configuration only and are reconstructed through an allowlist on import. Public source contains synthetic fixtures only. No backend was introduced.
+
+## v0.3 interaction and layout lifecycle
+
+The compact filters and dashboard drill-down share the same criteria. Current review queue membership uses configured workflow state IDs. Dialogs keep keyboard focus and restore it on close. Worker lifetime is owned by the graph canvas. A superseded job can release its worker while completed jobs allow reuse. Viewport functions separate readable reset, overview and selection. Browser tests exercise the production bundle with synthetic task graphs.

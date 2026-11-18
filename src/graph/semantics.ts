@@ -22,11 +22,16 @@ export function graphProjection(
   direction: "both" | "up" | "down" = "both",
 ) {
   const visibleIds = new Set(items.map((n) => n.id));
-  const boundaryIds = new Set(
-    g.links
-      .filter((e) => visibleIds.has(e.source) || visibleIds.has(e.target))
-      .flatMap((e) => [e.source, e.target]),
-  );
+  const participates = (e: Link) => {
+    if (mode === "hierarchy" || e.kind === "membership") return false;
+    if (mode === "dependency") return e.kind === "blocks";
+    if (mode === "focus") return e.kind === "blocks" || e.kind === "parent";
+    return visibility[e.kind];
+  };
+  const candidates = g.links.filter(participates);
+  const boundaryIds = new Set(candidates
+    .filter(e => visibleIds.has(e.source) || visibleIds.has(e.target))
+    .flatMap(e => [e.source, e.target]));
   let nodes = [
     ...items,
     ...g.items.filter((n) => n.kind === "boundary" && boundaryIds.has(n.id)),
@@ -36,24 +41,7 @@ export function graphProjection(
     nodes = nodes.filter((n) => set.has(n.id));
   }
   const ids = new Set(nodes.map((n) => n.id));
-  const links = g.links.filter(
-    (e) =>
-      ids.has(e.source) &&
-      ids.has(e.target) &&
-      (mode === "dependency"
-        ? e.kind === "blocks"
-        : mode === "focus"
-          ? e.kind === "blocks" || e.kind === "parent"
-          : mode === "hierarchy"
-            ? false
-            : e.kind === "blocks"
-              ? visibility.blocks
-              : e.kind === "parent"
-                ? visibility.parent
-                : e.kind === "related"
-                  ? visibility.related
-                  : false),
-  );
+  const links = candidates.filter(e => ids.has(e.source) && ids.has(e.target));
   return { nodes, links };
 }
 export function layoutFingerprint(

@@ -1,3 +1,5 @@
+import { BuildUpdate } from "./components/BuildUpdate";
+import { version } from "../package.json";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -50,6 +52,7 @@ import { Hierarchy } from "./views/Hierarchy";
 import { ProfileEditor } from "./components/ProfileEditor";
 import { ReviewBadge } from "./components/ReviewBadge";
 import { summarize, isActive, dependencyImpact } from "./analytics";
+import { useDialogFocus } from "./components/DialogFocus";
 const modes = [
   ["overview", "团队总览", LayoutDashboard],
   ["project", "项目探索", FolderOpen],
@@ -61,6 +64,7 @@ const modes = [
 ] as const;
 type Mode = (typeof modes)[number][0];
 const initialFilters = {
+  subset: "all",
   project: "all",
   milestone: "all",
   assignee: "all",
@@ -97,6 +101,7 @@ function App() {
     [visibility, setVisibility] = useState(defaultVisibility),
     [depth, setDepth] = useState(1),
     [direction, setDirection] = useState<"both" | "up" | "down">("both");
+  useDialogFocus(settings || profiles, () => {setSettings(false); setProfiles(false);});
   const session = useRef(new TeamSession()),
     reviewAbort = useRef(new AbortController()),
     cache = useRef(new ReviewCache()),
@@ -236,6 +241,9 @@ function App() {
     () =>
       issues.filter(
         (n) =>
+          (filter.subset !== "blocked" || diagnostics.blocked.has(n.id)) &&
+          (filter.subset !== "active" || isActive(n)) &&
+          (filter.subset !== "done" || n.statusType === "completed") &&
           (archived || !n.archived) &&
           (completed ||
             !["completed", "canceled"].includes(n.statusType || "")) &&
@@ -261,6 +269,16 @@ function App() {
       ),
     [graph, filter, archived, completed, profile, reviews],
   );
+  const queue = visible.filter(n =>
+    (!profile.reviewPolicy?.enabled || profile.reviewPolicy.inReviewStateIds.includes(n.stateId || "")) &&
+    `${n.identifier} ${n.title}`.toLowerCase().includes(query.trim().toLowerCase())
+  );
+  const matchesSearch = (n: Item) => `${n.identifier} ${n.title}`.toLowerCase().includes(query.trim().toLowerCase());
+  const resetFilters = () => {
+    setQuery(""); setFilter(initialFilters); setCompleted(true); setArchived(false);
+  };
+  const filterCount = Object.values(filter).filter(value => value !== "all").length +
+    Number(Boolean(query.trim())) + Number(archived) + Number(!completed);
   const readReviews = async (targets: Item[], force = false) => {
     if (!team || graph.source === "synthetic" || !profile.reviewPolicy?.enabled)
       return;
@@ -354,7 +372,7 @@ function App() {
           </div>
           <div>
             <b>Graph Explorer</b>
-            <small>LINEAR · v0.2.0</small>
+            <small>LINEAR · v{version}</small>
           </div>
         </div>
         <label className="team-selector">
@@ -384,6 +402,8 @@ function App() {
           {modes.map(([id, label, Icon]) => (
             <button
               key={id}
+              aria-label={label}
+              aria-current={mode === id ? "page" : undefined}
               title={label}
               className={mode === id ? "active" : ""}
               onClick={() => setMode(id)}
@@ -439,6 +459,7 @@ function App() {
           </div>
         </header>
         <section className="content">
+          <BuildUpdate />
           <div className="page-heading">
             <div>
               <div className="eyebrow">
@@ -448,7 +469,7 @@ function App() {
                 {title}
                 <span className="readonly">READ ONLY</span>
               </h1>
-              <p>逐层理解任务；需要时再展开关系。</p>
+
             </div>
             <button
               className="button primary"
@@ -464,7 +485,7 @@ function App() {
           {graph.source === "synthetic" && (
             <div className="notice demo">
               合成演示数据，不代表真实同步。
-              {([20, 50, 100] as const).map((count) => <button key={count} onClick={() => {
+              {([20, 50, 100, 200] as const).map((count) => <button key={count} onClick={() => {
                 setSelected(null);
                 setDetail(false);
                 setQuery("");
@@ -548,8 +569,11 @@ function App() {
                     { id: "none", name: "未分配" },
                     ...(graph.members || []),
                   ])}
-                  {options("全部角色", "role", profile.roles)}
                   {options("全部状态", "status", graph.states || [])}
+                  <button className="button small" onClick={resetFilters} disabled={!filterCount}>清空筛选（{filterCount}）</button>
+                  <details className="advanced"><summary>更多筛选</summary><div>
+                  {options("任务范围", "subset", [{id:"active",name:"活跃任务"},{id:"blocked",name:"有未完成前置项"},{id:"done",name:"已完成任务"}])}
+                  {options("全部角色", "role", profile.roles)}
                   {options(
                     "全部工作流",
                     "workstream",
@@ -586,34 +610,31 @@ function App() {
                     />
                     已完成
                   </label>
-                  <button
-                    className="button small"
-                    onClick={() => {
-                      setFilter(initialFilters);
-                      setQuery("");
-                    }}
-                  >
-                    重置筛选
-                  </button>
+                  </div></details>
                 </div>
               )}
               {(mode === "overview" || mode === "project") && (
                 <>
                   <div className="stats">
                     {[
-                      [projects.length, "团队项目"],
-                      [summary.active, "活跃任务"],
-                      [diagnostics.blocked.size, "有未完成前置项"],
-                      [summary.completed, "已完成任务"],
-                    ].map(([n, label]) => (
-                      <div className="stat" key={label}>
+                      [projects.length, "团队项目", "projects"],
+                      [summary.active, "活跃任务", "active"],
+                      [diagnostics.blocked.size, "有未完成前置项", "blocked"],
+                      [summary.completed, "已完成任务", "done"],
+                    ].map(([n, label, subset]) => (
+                      <button className="stat" key={label} onClick={() => {
+                        resetFilters();
+                        if (subset === "projects") {document.getElementById("project-list")?.scrollIntoView(); return;}
+                        setFilter({...initialFilters, subset: String(subset)});
+                        setMode("hierarchy");
+                      }}>
                         <span>{label}</span>
                         <strong>{n}</strong>
                         <small>
                           完整快照 ·{" "}
                           {graph.source === "live" ? "实时来源" : "合成数据"}
                         </small>
-                      </div>
+                      </button>
                     ))}
                   </div>
                   <div className="overview-bottom">
@@ -705,7 +726,7 @@ function App() {
                       <small>任务数不等同实际工作量或产能。</small>
                     </section>
                   </div>
-                  <h2 className="section-title">项目空间</h2>
+                  <h2 id="project-list" className="section-title">项目空间</h2>
                   <div className="project-grid">
                     {projects.map((p) => {
                       const s = summarize(
@@ -782,7 +803,9 @@ function App() {
                   </div>
                 </>
               )}
-              {mode === "hierarchy" && (
+              {mode === "hierarchy" && filterCount > 0 && !visible.some(matchesSearch) ? (
+                <p role="status">当前筛选下没有匹配任务。</p>
+              ) : mode === "hierarchy" && (
                 <Hierarchy
                   graph={graph}
                   items={visible.filter(
@@ -872,6 +895,7 @@ function App() {
                     </div>
                   )}
                   <GraphView
+                    blocked={diagnostics.blocked}
                     graph={graph}
                     items={visible}
                     mode={mode as GraphMode}
@@ -903,12 +927,12 @@ function App() {
                     <button
                       className="button small"
                       disabled={reviewBusy || !profile.reviewPolicy?.enabled}
-                      onClick={() => readReviews(visible, true)}
+                      onClick={() => readReviews(queue, true)}
                     >
                       {reviewBusy ? "读取中…" : "刷新筛选任务的审阅"}
                     </button>
                     <span>
-                      优先自动读取配置的 In Review 任务；其余按需读取。
+                      当前入审状态的任务 · {queue.length} 项
                     </span>
                   </div>
                   {reviewError && (
@@ -921,15 +945,8 @@ function App() {
                     </div>
                   )}
                   <div className="task-list">
-                    {visible
-                      .filter(
-                        (n) =>
-                          !query ||
-                          `${n.identifier} ${n.title}`
-                            .toLowerCase()
-                            .includes(query.toLowerCase()),
-                      )
-                      .map((n) => (
+                    {queue.length === 0 && <p role="status">当前筛选下没有待审阅任务。</p>}
+                    {queue.map((n) => (
                         <button
                           className="task-row"
                           key={n.id}
@@ -940,6 +957,12 @@ function App() {
                               {n.identifier} · {n.assignee || "未分配"}
                             </small>
                             <strong>{n.title}</strong>
+                            {profile.reviewPolicy?.enabled && reviews[n.id]?.boundary && <small>
+                              待表态：{profile.reviewPolicy.eligibleReviewerIds.filter(id =>
+                                !(profile.reviewPolicy?.excludeAssignee && id === n.assigneeId) &&
+                                !reviews[n.id].decisions.some(d => d.reviewerId === id)
+                              ).map(id => graph.members?.find(m => m.id === id)?.name || "成员").join("、") || "无"}
+                            </small>}
                           </span>
                           <ReviewBadge result={reviewResult(n)} />
                         </button>
@@ -952,7 +975,7 @@ function App() {
           <footer>
             <span>
               <ShieldCheck size={13} />
-              所选团队隔离 · 只读 GraphQL · v0.2.0
+              所选团队隔离 · 只读 GraphQL · v{version}
             </span>
             <span>
               {graph.syncedAt
@@ -1006,7 +1029,7 @@ function App() {
             >
               聚焦此任务
             </button>
-            <h3>依赖影响</h3>
+            <details open key={selected.id + "-relations"}><summary>关系与依赖影响</summary>
             {(() => {
               const a = dependencyImpact(graph, selected.id);
               return (
@@ -1050,7 +1073,7 @@ function App() {
                   );
                 })}
             </div>
-            <h3>评论审阅（分析状态 ≠ Done）</h3>
+            </details><details open key={selected.id + "-review"}><summary>审阅证据</summary>
             {reviewError && <p role="alert">{reviewError}</p>}
             {reviewResult(selected).warning && (
               <p>{reviewResult(selected).warning}</p>
@@ -1076,8 +1099,9 @@ function App() {
                 <p>{d.excerpt}</p>
               </div>
             ))}
-            <h3>说明</h3>
-            <p className="description">{selected.description || "暂无说明"}</p>
+            </details><details key={selected.id + "-description"}><summary>任务说明</summary>
+            <p className="description">{selected.description || "暂无说明"}</p></details>
+            <small>完整同步于 {new Date(graph.syncedAt).toLocaleString("zh-CN")}</small>
             {selected.url?.startsWith("https://linear.app/") && (
               <a
                 className="button"
