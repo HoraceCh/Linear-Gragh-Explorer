@@ -23,6 +23,7 @@ jobs:
           cache: npm
       - run: node --version && npm --version
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm test
       - run: node --test scripts/validate-pages.checks.mjs
       - run: node scripts/validate-host-config.mjs && npm run build
