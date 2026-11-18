@@ -8,6 +8,11 @@ interface Props {
   explore: (mode: "hierarchy" | "dependency", projectId: string) => void;
 }
 const tone=(type?:string)=>type==="completed"?"done":type==="canceled"?"cancelled":type==="started"?"active":"todo";
+const shortDate=(value?:string)=>{
+ if(!value)return "";
+ const date=new Date(value);
+ return Number.isNaN(date.getTime())?"":date.toLocaleDateString("zh-CN",{month:"numeric",day:"numeric"});
+};
 
 export function ProjectExplorer({projects,milestones,issues,blocked,projectId,choose,open,explore}:Props){
  const [search,setSearch]=useState(""),[tasks,setTasks]=useState(""),[scope,setScope]=useState("all"),[sort,setSort]=useState("updated");
@@ -68,7 +73,7 @@ export function ProjectExplorer({projects,milestones,issues,blocked,projectId,ch
     <div className="project-task-groups">{[...groups].filter(([,rows])=>rows.length).map(([id,rows])=><details className="project-task-group" open key={id}>
      <summary><span>{projectMilestones.find(m=>m.id===id)?.title||"未分配里程碑"}</span><span>{rows.length} 项任务</span></summary>
      <div className="project-task-list">{rows.map(i=><button className="project-task-row" key={i.id} onClick={()=>open(i)}>
-      <span className="project-task-main"><span className="project-task-topline"><span className="project-issue-id">{i.identifier||"ISSUE"}</span><span className={"project-status-pill project-status-"+tone(i.statusType)}>{i.status||"未知状态"}</span>{blocked.has(i.id)&&<span className="project-blocked-pill">存在未完成前置项</span>}</span><strong>{i.title}</strong><span className="project-task-meta"><span>{i.assignee||"未分配负责人"}</span><span>{(["紧急","高","中","低"][((i.priority||0)-1)]||"未设置优先级")}</span>{i.dueDate&&<span>截止 {i.dueDate}</span>}</span></span><span className="project-task-open">→</span>
+      <span className="project-task-main"><span className="project-task-topline"><span className="project-issue-id">{i.identifier||"ISSUE"}</span><span className={"project-status-pill project-status-"+tone(i.statusType)}>{i.status||"未知状态"}</span>{blocked.has(i.id)&&<span className="project-blocked-pill">存在未完成前置项</span>}</span><strong>{i.title}</strong><span className="project-task-meta"><span>{i.assignee||"未分配负责人"}</span><span>{(["紧急","高","中","低"][((i.priority||0)-1)]||"未设置优先级")}</span>{i.dueDate&&<span>截止 {shortDate(i.dueDate)}</span>}</span></span><span className="project-task-open">→</span>
      </button>)}</div>
     </details>)}</div>}
   </div>
