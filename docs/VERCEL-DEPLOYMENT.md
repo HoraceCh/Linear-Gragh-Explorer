@@ -10,3 +10,5 @@ GitHub 是唯一源码来源。现有私有 Site 保留开发用途。Vercel 使
 6. 记录 PR、SHA、部署 ID、环境、保护范围、验证时间、批准人和上一个可回滚部署。浏览器检查入口响应 no-store、哈希资源 immutable 和 CSP。GraphQL 与 OAuth 直接访问 Linear，Vercel CDN 只分发外壳。
 
 本次未启用 Pages。Vercel 当前套餐及线上设置以控制台和实际匿名访问结果为准。
+
+从 Git source 选择仓库、release 分支和完整 SHA，创建部署时省略 target。保留 Production ignore gate。创建后核对项目、分支、meta.githubCommitSha、readyState、target、别名归属；本项目已观察到 Preview 的 API target 为 null。遇到 production 或身份不匹配即停止。用匿名 GET 检查入口及本次构建日志中的每个哈希资源，再用有权访问的浏览器打开分支别名。

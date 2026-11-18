@@ -23,3 +23,5 @@ Public v0.2 baseline audited from PR #1: `8125c7f893bbff5df8ee88e7304044dfc9d7b6
 ## v0.3.1 发布门禁
 
 保护预览须分别验收别名和部署 URL。内部真实使用须验证稳定 OAuth 回调。合并须审核候选 SHA 与 CI。公开发布另需负责人批准、真实账号权限验证和可恢复部署记录。参考 [多用户验收](MULTI-USER-ACCEPTANCE.md) 与 [回滚](ROLLBACK.md)。
+
+公开发布还须通过完整构建依赖审计。当前 picomatch 的 High 记录与验证范围见 [依赖安全记录](DEPENDENCY-SECURITY.md)。

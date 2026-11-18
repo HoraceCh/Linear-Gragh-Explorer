@@ -9,3 +9,5 @@
 | 部署保护 | 对唯一 URL 和所有别名检查匿名访问、获准账号访问以及登录后的 Worker 加载。实际部署后执行。 |
 
 Real two-reviewer approval acceptance pending external evidence. 在自然产生本轮有效评论前保留当前可核实状态。
+
+拒绝授权的回调会消费临时事务；回放相同 state 时应在网络交换前失败。真实第二账号及撤权仍需授权测试者。

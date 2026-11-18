@@ -7,3 +7,5 @@
 Linear 决定该身份能够访问哪些 Team。应用按当前选择限制查询并验证结果归属；read scope 可以读取提供方允许的其他 Team。关系外端点只显示匿名占位。Team Profile 与上次选择按 Workspace ID 和 Viewer ID 分区，Profile 另加 Team ID。旧版配置没有所有者记录，默认保持原处，用户确认归属后可在团队配置中迁移。共享设备应使用独立浏览器账号，本地偏好没有加密。导出含成员映射，请私下保管。
 
 Private OAuth App 的分发限于创建它的 Workspace；跨 Workspace 接入需可供相应工作区授权的应用，并遵守管理员安装策略。当前注册类型要由创建者在 Linear 设置中核实；源码无法判定当前 App 的分发设置。本版本每次连接一个 Workspace。
+
+固定回调配置使用 Preview 环境的分支级变量。变更后重新构建；在正式连接前核对浏览器当前 URL 与注册记录，包括尾斜杠。

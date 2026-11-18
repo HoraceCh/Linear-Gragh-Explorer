@@ -50,3 +50,5 @@ RC verification passed 101 Vitest checks. The v0.3 candidate adds fixture, viewp
 ## v0.3.x
 
 v0.3.1 的新增验证包括身份分区、旧配置迁移、固定回调、浏览器多会话与根路径产物。真实证据清单见 [多用户验收](MULTI-USER-ACCEPTANCE.md)。
+
+将匿名 Preview 的入口、实际哈希资源和分支别名分别检查；记录跳转目标的 origin 和 path，丢弃查询串。登录后再记录应用资源的响应头。
