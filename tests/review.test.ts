@@ -177,7 +177,7 @@ it("requires creation strictly after the transition even when edited later", () 
 describe("standalone decision vocabulary", () => {
   it.each([["approved","approve"],[" Approved WITH comments ","approve"],
     ["Request changes","requestChanges"],["Changes requested","requestChanges"],
-    ["Hold","hold"],["On hold","hold"]])("accepts %s with explanation", (line, decision) =>
+    ["Hold","hold"],["On hold","hold"],["Unable to assess","unableToAssess"]])("accepts %s with explanation", (line, decision) =>
     expect(parseMarker(line+"\n\nSee my observations.", defaultMarkers)).toBe(decision));
   it.each(["I think this is approved.","Not approved yet.","We may approve it later.",
     "The previous reviewer said Approved.","> Approved","~~~\nApproved\n~~~","    Approved",
@@ -189,4 +189,11 @@ describe("standalone decision vocabulary", () => {
     expect(calc([...decisions,comment("3","b","On hold")]).status).toBe("On Hold");
     expect(calc([comment("old","b","Approved",{createdAt:boundary})]).approvals).toBe(0);
   });
+});
+
+
+it("Unable to assess blocks Review Passed without counting as an approval", () => {
+ const result=calc([comment("1","a","Approved"),comment("2","b","Unable to assess")]);
+ expect(result.approvals).toBe(1);
+ expect(result.status).toBe("Unable to Assess");
 });
