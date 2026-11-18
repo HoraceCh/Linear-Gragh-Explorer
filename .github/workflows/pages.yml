@@ -3,20 +3,18 @@ on:
   workflow_dispatch:
     inputs:
       security_accepted:
-        description: "OAuth, PVCR isolation and live data acceptance completed"
+        description: "Release owner approves the public application shell and completed acceptance checks"
         type: boolean
         required: true
         default: false
 permissions:
   contents: read
-  pages: write
-  id-token: write
 concurrency:
   group: pages
   cancel-in-progress: false
 jobs:
   build:
-    if: inputs.security_accepted
+    if: inputs.security_accepted && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,15 +24,22 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: node --test scripts/validate-pages.checks.mjs
       - run: npm run build
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
           VITE_LINEAR_CLIENT_ID: ${{ vars.LINEAR_CLIENT_ID }}
-      - uses: actions/upload-pages-artifact@v3
+      - run: node scripts/validate-pages.mjs dist "$VITE_BASE_PATH"
+        env:
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
   deploy:
     needs: build
+    permissions:
+      pages: write
+      id-token: write
     runs-on: ubuntu-latest
     environment:
       name: github-pages

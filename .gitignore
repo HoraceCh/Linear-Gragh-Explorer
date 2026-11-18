@@ -6,3 +6,6 @@ dist/
 *.tsbuildinfo
 .openai/*.local.*
 coverage/
+
+test-results/
+playwright-report/

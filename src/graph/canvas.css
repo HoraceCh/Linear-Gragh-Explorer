@@ -1,0 +1,14 @@
+.v2-graph { --lane-fill: #71619b10; }
+.v2-graph .graph-node { display: flex; flex-direction: column; }
+.v2-graph .graph-node strong { font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+.v2-graph .node-top { display: flex; align-items: center; gap: 6px; }
+.v2-graph .node-top .dot { margin-left: auto; }
+.v2-graph .node-bottom { margin-top: auto; }
+.v2-graph .blocked-label { color: #874416; background: #fff1dc; border-radius: 4px; padding: 2px 5px; }
+.v2-graph .dark .blocked-label { color: #ffd4a4; background: #493424; }
+.v2-graph .react-flow__node:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.v2-graph .graph-node.selected { box-shadow: 0 0 0 2px var(--accent); }
+.v2-graph .react-flow__controls-button { min-width: 32px; min-height: 32px; }
+@media (pointer: coarse) {
+  .v2-graph .react-flow__controls-button { min-width: 44px; min-height: 44px; }
+}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -25,17 +25,24 @@ import {
   type Visibility,
 } from "./semantics";
 import { type ReviewResult, reviewLabels } from "../review/engine";
-const elk = new ELK({ workerFactory: () => new ElkWorker() });
+import { LayoutWorkerSession } from "./workerSession";
+import { cardBounds, centerCard, graphViewport } from "./viewport";
+import "./canvas.css";
+
+function motionDuration() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180;
+}
 function Card({ data, selected }: NodeProps) {
   const n = data.item as Item;
   return (
     <div className={`graph-node ${n.kind} ${selected ? "selected" : ""}`}>
       <Handle type="target" position={Position.Left} />
       <div className="node-top">
-        <span>{n.identifier || "边界"}</span>
+        <span>{n.identifier || "边界"}{n.parentId ? " · 子任务" : ""}</span>
+        {data.blocked === true && <span className="blocked-label">受阻</span>}
         <span className={`dot ${n.statusType || ""}`} />
       </div>
-      <strong>{n.title}</strong>
+      <strong title={n.title}>{n.title}</strong>
       <div className="node-bottom">
         <span>{n.assignee || "未分配"}</span>
         <span>{n.status || ""}</span>
@@ -85,6 +92,7 @@ const nodeTypes = { card: Card },
   edgeTypes = { routed: RouteEdge };
 export function GraphView({
   graph,
+  blocked,
   items,
   mode,
   visibility,
@@ -97,6 +105,7 @@ export function GraphView({
   query,
 }: {
   graph: Graph;
+  blocked?: ReadonlySet<string>;
   items: Item[];
   mode: GraphMode;
   visibility: Visibility;
@@ -108,21 +117,15 @@ export function GraphView({
   reviews: Record<string, ReviewResult>;
   query: string;
 }) {
-  const projection = graphProjection(
-    graph,
-    items,
-    mode,
-    visibility,
-    selected,
-    depth,
-    direction,
-  );
+  const focusId = mode === "focus" ? selected : undefined;
+  const projection = useMemo(() => graphProjection(
+    graph, items, mode, visibility, focusId, depth, direction,
+  ), [graph, items, mode, visibility, focusId, depth, direction]);
   const grouped = mode === "combined" && visibility.grouping;
-  const fingerprint = layoutFingerprint(
-    projection.nodes,
-    projection.links,
-    grouped,
-  );
+  const fingerprint = useMemo(() =>
+    layoutFingerprint(projection.nodes, projection.links, grouped), [projection, grouped]);
+  const [worker] = useState(() => new LayoutWorkerSession(() => new ELK({ workerFactory: () => new ElkWorker() })));
+  useEffect(() => () => worker.dispose(), [worker]);
   const [nodes, setNodes] = useState<Node[]>([]),
     [routes, setRoutes] = useState<Map<string, RoutePoint[]>>(new Map()),
     [busy, setBusy] = useState(false),
@@ -130,7 +133,9 @@ export function GraphView({
     [canvasHeight, setCanvasHeight] = useState(460),
     [layoutVersion, setLayoutVersion] = useState(0),
     [map, setMap] = useState(true);
-  const instance = useRef<ReactFlowInstance | null>(null);
+  const [flow, setFlow] = useState<ReactFlowInstance | null>(null);
+  const [readyKey, setReadyKey] = useState<string | null>(null);
+  const layoutKey = JSON.stringify([fingerprint, layoutVersion]);
   const shell = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const measure = () => {
@@ -142,12 +147,12 @@ export function GraphView({
     measure();
     return () => { observer.disconnect(); window.removeEventListener("resize", measure); };
   }, []);
-  const lastFit = useRef("");
+
   const revision = useRef(0);
   const latest = useRef({ projection, graph, mode });
   latest.current = { projection, graph, mode };
   useEffect(() => {
-    let stale = false;
+    const controller = new AbortController();
     const run = ++revision.current;
     setBusy(true);
     setError("");
@@ -159,7 +164,9 @@ export function GraphView({
         const lanes = new Map<string, Item[]>();
         for (const n of p.nodes) {
           const key = n.milestoneId || n.projectId || "unassigned";
-          lanes.set(key, [...(lanes.get(key) || []), n]);
+          const lane = lanes.get(key);
+          if (lane) lane.push(n);
+          else lanes.set(key, [n]);
         }
         let y = 0;
         for (const [key, list] of lanes) {
@@ -174,7 +181,7 @@ export function GraphView({
             style: {
               width: 960,
               height: h,
-              background: dark ? "#71619b14" : "#71619b08",
+              background: "var(--lane-fill)",
               border: "1px solid var(--border)",
               borderRadius: 12,
             },
@@ -198,17 +205,16 @@ export function GraphView({
           );
           y += h + 60;
         }
-      } else {
-        const layout: ElkNode = await elk.layout(
-          dependencyLayoutInput(p.nodes, p.links),
-        );
+      } else if (p.nodes.length) {
+        const layout: ElkNode = await worker.run(dependencyLayoutInput(p.nodes, p.links), controller.signal);
+        const byId = new Map(p.nodes.map(item => [item.id, item]));
         ns = (layout.children || []).map((n) => ({
           id: n.id,
           type: "card",
           position: { x: n.x || 0, y: n.y || 0 },
           width: 280,
           height: 164,
-          data: { item: p.nodes.find((i) => i.id === n.id)! },
+          data: { item: byId.get(n.id)! },
         }));
         for (const e of layout.edges || []) {
           if (e.sections?.length)
@@ -222,77 +228,53 @@ export function GraphView({
             );
         }
       }
-      if (stale || run !== revision.current) return;
+      if (controller.signal.aborted || run !== revision.current) return;
       setNodes(ns);
       setRoutes(routes);
       setBusy(false);
-      // Structural changes fit once. Details, selection and theme never remount the canvas.
-      const fitKey = fingerprint + layoutVersion;
-      if (lastFit.current !== fitKey) {
-        lastFit.current = fitKey;
-        requestAnimationFrame(() => {
-          if (latest.current.mode === "focus") return;
-          instance.current?.fitView({
-            minZoom: 0.65,
-            maxZoom: 1,
-            padding: 0.18,
-            duration: 200,
-          });
-        });
-      }
+      setReadyKey(layoutKey);
     };
     void work().catch(() => {
-      if (!stale) {
+      if (!controller.signal.aborted) {
         setBusy(false);
         setError("布局失败，请缩小筛选范围或重试。");
       }
     });
-    return () => {
-      stale = true;
-    };
-  }, [fingerprint, layoutVersion]);
+    return () => controller.abort();
+  }, [layoutKey, worker]);
+
+  const cards = useMemo(() => cardBounds(nodes), [nodes]);
+  const panel = shell.current;
+  function moveCamera(targetId?: string, fitAll = false) {
+    if (!panel || !flow || readyKey !== layoutKey) return;
+    const { clientWidth: width, clientHeight: height } = panel;
+    const card = targetId && cards.find(card => card.id === targetId);
+    const camera = card ? centerCard(card, width, height, Math.max(0.85, flow.getZoom())) :
+      graphViewport(cards, width, height, fitAll);
+    if (camera) void flow.setViewport(camera, { duration: motionDuration() });
+  }
+
   useEffect(() => {
-    if (mode !== "focus" || !selected) return;
-    const node = nodes.find((n) => n.id === selected && !n.parentId);
-    if (!node) return;
-    const frame = requestAnimationFrame(() => instance.current?.setCenter(
-      node.position.x + 140, node.position.y + 82,
-      { zoom: Math.max(instance.current?.getZoom() || 0.85, 0.85), duration: 200 },
-    ));
+    if (!flow || !panel || readyKey !== layoutKey) return;
+    const search = query.trim().toLowerCase();
+    const issues = latest.current.projection.nodes;
+    const match = search && (issues.find(n => n.identifier?.toLowerCase() === search) ||
+      issues.find(n => n.title.toLowerCase().includes(search)));
+    const frame = requestAnimationFrame(() => moveCamera(match ? match.id : focusId));
     return () => cancelAnimationFrame(frame);
-  }, [mode, selected, nodes]);
-  useEffect(() => {
-    if (!query) return;
-    const found =
-      nodes.find(
-        (n) =>
-          (n.data.item as Item | undefined)?.identifier?.toLowerCase() ===
-          query.toLowerCase(),
-      ) ||
-      nodes.find((n) =>
-        (n.data.item as Item | undefined)?.title
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-      );
-    if (found)
-      instance.current?.fitView({
-        nodes: [{ id: found.id }],
-        minZoom: 0.85,
-        maxZoom: 1,
-        duration: 200,
-      });
-  }, [query, nodes]);
+  }, [flow, panel, readyKey, layoutKey, focusId, query]);
   const direct = mode === "focus" && selected ? neighborhood(graph, selected, 1, direction) : null;
   const displayNodes: Node[] = currentLayoutNodes(nodes, projection.nodes, grouped).map((n) => ({
     ...n,
     selected: n.id === selected,
     style: { ...n.style, opacity: direct && n.type !== "group" && !direct.has(n.id) ? 0.5 : 1 },
-    data: { ...n.data, review: reviews[n.id] },
+    ariaLabel: n.type === "card" ? `${(n.data.item as Item).identifier || ""} ${(n.data.item as Item).title}` : undefined,
+    data: { ...n.data, review: reviews[n.id], blocked: blocked?.has(n.id) },
   }));
   return (
     <>
       <div className="graph-actions">
-        <span>
+        <span role="status">
           {projection.nodes.length} 节点 · {projection.links.length} 条可见关系{" "}
           {busy ? "· 布局中…" : ""}
         </span>
@@ -302,16 +284,13 @@ export function GraphView({
         >
           自动布局
         </button>
-        <button
-          className="button small"
-          onClick={() =>
-            instance.current?.fitView({
-              minZoom: 0.65,
-              maxZoom: 1,
-              padding: 0.2,
-            })
-          }
-        >
+        <button className="button small" disabled={busy || !cards.length} onClick={() => moveCamera(undefined, true)}>
+          适应全图
+        </button>
+        <button className="button small" disabled={busy || !cards.some(card => card.id === selected)} onClick={() => moveCamera(selected)}>
+          居中选中项
+        </button>
+        <button className="button small" disabled={busy || !cards.length} onClick={() => moveCamera(focusId)}>
           重置视图
         </button>
         <label>
@@ -323,7 +302,14 @@ export function GraphView({
           小地图
         </label>
       </div>
-      <div className="graph-shell v2-graph" ref={shell} style={{height: canvasHeight, minHeight: 360}}>
+      <div className="graph-shell v2-graph" aria-label="任务关系图" role="region" ref={shell}
+        onKeyDown={event => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          const element = event.target as HTMLElement;
+          if (!element.classList.contains("react-flow__node")) return;
+          const item = projection.nodes.find(n => n.id === element.dataset.id);
+          if (item) { event.preventDefault(); onSelect(item); }
+        }} style={{height: canvasHeight, minHeight: 360}}>
         {error && <div className="graph-empty">{error}</div>}
         <ReactFlow<Node, Edge>
           nodes={displayNodes}
@@ -335,12 +321,9 @@ export function GraphView({
           }))}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          onInit={(i) => {
-            instance.current = i;
-            i.fitView({ minZoom: 0.65, maxZoom: 1 });
-          }}
+          onInit={setFlow}
           onNodeClick={(_, n) => n.data.item && onSelect(n.data.item as Item)}
-          minZoom={0.15}
+          minZoom={0.001}
           maxZoom={2}
           nodesDraggable={false}
           nodesConnectable={false}
@@ -349,9 +332,10 @@ export function GraphView({
           attributionPosition="bottom-left"
         >
           <Background gap={24} />
-          <Controls position="top-left" showInteractive={false} />
+          <Controls position="top-left" showFitView={false} showInteractive={false} />
           {map && (
             <MiniMap
+              ariaLabel="图谱小地图，可拖动或缩放"
               style={{ width: 180, height: 110, bottom: 16, right: 12 }}
               nodeColor={(n) =>
                 n.type === "group" ? (dark ? "#374151" : "#e9e4f4") : "#9273d1"
@@ -375,10 +359,10 @@ export function GraphView({
         )}
       </div>
       <div className="graph-legend">
-        <span>🟠 阻塞 →</span>
-        <span>🟣 父子 →</span>
-        <span>┄ 一般相关（无向）</span>
-        <span>归属通过分组表示；边标签悬停显示</span>
+        {(mode !== "combined" || visibility.blocks) && <span>🟠 阻塞 →</span>}
+        {(mode === "focus" || (mode === "combined" && visibility.parent)) && <span>🟣 父子 →</span>}
+        {mode === "combined" && visibility.related && <span>┄ 一般相关（无向）</span>}
+        {grouped && <span>分组表示项目或里程碑</span>}
       </div>
     </>
   );
