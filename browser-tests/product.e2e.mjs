@@ -12,6 +12,10 @@ for (const width of [375, 390, 768, 1280, 1440]) {
       await activate(button("项目探索"));
       const index = page.getByRole("region",{name:"项目索引"});
       await expect(index).toBeVisible();
+      await activate(button("切换深浅色"));
+      await expect(page.locator("html")).toHaveAttribute("data-theme","dark");
+      await activate(button("切换深浅色"));
+      await expect(page.locator("html")).toHaveAttribute("data-theme","light");
       await index.getByLabel("搜索项目").fill("no-project-ever");
       await expect(index.getByText("没有匹配项目。")).toBeVisible();
       await index.getByLabel("搜索项目").fill("");
@@ -140,7 +144,7 @@ test("wheel anchors zoom at cursor and middle drag pans only the canvas", async 
   expect(panned.y-zoomed.y).toBeCloseTo(30,0);
   expect(panned.scroll).toBe(before.scroll);
   await button("适应全图").click();
-  await page.getByLabel("小地图").check();
+  await page.getByRole("checkbox",{name:"小地图",exact:true}).check();
   await expect(page.locator(".react-flow__minimap")).toBeVisible();
   await page.locator(".react-flow__node").first().click();
   await expect(button("关闭详情")).toBeVisible();
