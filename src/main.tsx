@@ -1,3 +1,5 @@
+import { BuildUpdate } from "./components/BuildUpdate";
+import { version } from "../package.json";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -370,7 +372,7 @@ function App() {
           </div>
           <div>
             <b>Graph Explorer</b>
-            <small>LINEAR · v0.3.0</small>
+            <small>LINEAR · v{version}</small>
           </div>
         </div>
         <label className="team-selector">
@@ -457,6 +459,7 @@ function App() {
           </div>
         </header>
         <section className="content">
+          <BuildUpdate />
           <div className="page-heading">
             <div>
               <div className="eyebrow">
@@ -972,7 +975,7 @@ function App() {
           <footer>
             <span>
               <ShieldCheck size={13} />
-              所选团队隔离 · 只读 GraphQL · v0.3.0
+              所选团队隔离 · 只读 GraphQL · v{version}
             </span>
             <span>
               {graph.syncedAt

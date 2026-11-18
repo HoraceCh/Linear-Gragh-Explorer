@@ -1,4 +1,4 @@
-# Linear Graph Explorer · v0.2.0
+# Linear Graph Explorer · v0.3.0
 
 Read-only task graphs and review intelligence for any team accessible to your Linear identity in the connected workspace. React, TypeScript, Vite, React Flow and ELKjs. MIT licensed.
 
