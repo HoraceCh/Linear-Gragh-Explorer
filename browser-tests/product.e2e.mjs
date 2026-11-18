@@ -17,12 +17,12 @@ for (const width of [375, 390, 768, 1280, 1440]) {
       await activate(button("切换深浅色"));
       await expect(page.locator("html")).toHaveAttribute("data-theme","light");
       await index.getByLabel("搜索项目").fill("no-project-ever");
-      await expect(index.getByText("没有匹配项目。")).toBeVisible();
+      await expect(index.getByText("没有匹配项目，请调整搜索条件。")).toBeVisible();
       await index.getByLabel("搜索项目").fill("");
       await activate(index.locator(".project-card").first());
       const workspace = page.getByRole("region",{name:"项目工作区"});
       await workspace.getByLabel("搜索项目任务").fill("no-match-ever");
-      await expect(workspace.getByText("当前没有匹配任务。")).toBeVisible();
+      await expect(workspace.getByText("当前条件下没有匹配任务。")).toBeVisible();
       await workspace.getByLabel("搜索项目任务").fill("");
       await activate(workspace.locator(".project-task-row").first());
       await activate(button("关闭详情"));
