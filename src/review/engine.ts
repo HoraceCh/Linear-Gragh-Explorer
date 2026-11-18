@@ -56,6 +56,11 @@ export function parseMarker(
   const found: Decision[] = [];
   let html = false;
   for (const raw of body.split(/\r?\n/)) {
+    if (!fence && (html || raw.includes("<!--"))) {
+      // Skip the whole line. Track successive close/open delimiters independently.
+      for (const match of raw.matchAll(/<!--|-->/g)) html = match[0] === "<!--";
+      continue;
+    }
     if (/^ {0,3}>/.test(raw)) continue;
     const f = raw.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
     if (f) {
@@ -69,12 +74,7 @@ export function parseMarker(
       continue;
     }
     if (fence) continue;
-    if (raw.includes("<!--")) html = true;
-    if (html) {
-      if (raw.includes("-->")) html = false;
-      continue;
-    }
-    if (/^( {4}|\t)/.test(raw)) continue;
+    if (/^(?: {4}| {0,3}\t)/.test(raw)) continue;
     const line = raw.trim().toUpperCase();
     if (Object.hasOwn(commands, line)) found.push(commands[line]);
     for (const d of ["approve", "requestChanges", "hold"] as Decision[])

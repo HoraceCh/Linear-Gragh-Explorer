@@ -925,6 +925,11 @@ function App() {
               )}
               {mode === "reviews" && (
                 <section className="review-queue">
+                  <details><summary>如何在 Linear 提交审阅意见</summary>
+                    <p>在当前轮次的任务评论中单独写一行决定，下一行可补充说明。</p>
+                    <p>批准：Approved 或 Approved with comments。要求修改：Request changes 或 Changes requested。暂缓：Hold 或 On hold。也支持团队配置的 REVIEW 标记。</p>
+                    <p>只有已配置审阅人的本轮意见计入；每人取最新有效决定。打开任务可查看证据与忽略原因。</p>
+                  </details>
                   <div className="graph-actions">
                     {options(
                       "全部审阅状态",

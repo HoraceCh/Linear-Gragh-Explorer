@@ -181,7 +181,7 @@ describe("standalone decision vocabulary", () => {
     expect(parseMarker(line+"\n\nSee my observations.", defaultMarkers)).toBe(decision));
   it.each(["I think this is approved.","Not approved yet.","We may approve it later.",
     "The previous reviewer said Approved.","> Approved","~~~\nApproved\n~~~","    Approved",
-    "<!--\nApproved\n-->","Approved\nHold"])("rejects %s", body =>
+    "<!--\nApproved\n-->","Approved\nHold","  \tApproved","<!-- first --> <!-- second\nApproved\n-->"])("rejects %s", body =>
     expect(parseMarker(body, defaultMarkers)).toBeNull());
   it("applies identity and round rules to ordinary commands", () => {
     const decisions=[comment("1","a","Approved"),comment("2","b","Approved with comments")];
