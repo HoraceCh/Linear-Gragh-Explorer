@@ -56,3 +56,7 @@ The existing preview remains private. GitHub Pages is not enabled or published i
 The overview links into filtered work, the configured queue shows current review candidates, and graph controls distinguish a readable starting position from a whole-graph fit. Open **更多筛选** for secondary filters. Use **团队配置** to edit this browser’s team-specific policy.
 
 See [UX audit](docs/UX-AUDIT.md), [performance measurements](docs/PERFORMANCE.md), and [release readiness](docs/RELEASE-READINESS.md). Run the synthetic browser suite after building with `npx playwright install chromium` and `npm run test:browser`.
+
+## v0.3.x
+
+v0.3.1 候选版支持 Vercel 根目录与 Pages 子路径构建。逐用户配置与发布门禁见 [Vercel 部署](docs/VERCEL-DEPLOYMENT.md) 和 [OAuth 安全](docs/OAUTH-SECURITY.md)。

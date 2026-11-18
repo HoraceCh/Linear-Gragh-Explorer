@@ -46,3 +46,7 @@ Stabilization adds coverage for current assignee/state during review, ambiguous 
 ## Product-quality candidate
 
 RC verification passed 101 Vitest checks. The v0.3 candidate adds fixture, viewport and worker lifecycle checks, eight Pages artifact checks and production Chromium tests for responsive navigation, dialog focus, filters, details and dense graph selection. CI runs Chromium independently of private identity. See the current PR checks for browser outcomes.
+
+## v0.3.x
+
+v0.3.1 的新增验证包括身份分区、旧配置迁移、固定回调、浏览器多会话与根路径产物。真实证据清单见 [多用户验收](MULTI-USER-ACCEPTANCE.md)。

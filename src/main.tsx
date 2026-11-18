@@ -22,9 +22,9 @@ import "./style.css";
 import "./v2.css";
 import { analyze, emptyGraph, type Graph, type Item } from "./model";
 import { demoGraph, scaleGraph } from "./demo";
-import { syncGraph, discoverTeams, boundedMap, LinearAccessError } from "./api";
+import { syncGraph, discoverIdentity, discoverTeams, boundedMap, LinearAccessError } from "./api";
 import {
-  configuredClient,
+  configuredClient, liveOAuthAllowed,
   login,
   finishLogin,
   disconnect,
@@ -34,7 +34,7 @@ import {
 import type { TeamContext } from "./team/types";
 import { TeamSession } from "./team/session";
 import {
-  loadProfile,
+  loadProfile, importLegacyProfile,
   saveProfile,
   defaultProfile,
   type TeamProfile,
@@ -53,6 +53,7 @@ import { ProfileEditor } from "./components/ProfileEditor";
 import { ReviewBadge } from "./components/ReviewBadge";
 import { summarize, isActive, dependencyImpact } from "./analytics";
 import { useDialogFocus } from "./components/DialogFocus";
+import { preferenceKey, type Identity } from "./team/identity";
 const modes = [
   ["overview", "团队总览", LayoutDashboard],
   ["project", "项目探索", FolderOpen],
@@ -108,6 +109,7 @@ function App() {
     teamRef = useRef<TeamContext | null>(null),
     generation = useRef(0),
     reviewGen = useRef(0);
+  const identity = useRef<Identity | null>(null);
   const discoveryAbort = useRef(new AbortController());
   const clearReviews = (clearData = true) => {
     reviewAbort.current.abort();
@@ -119,6 +121,8 @@ function App() {
     setReviewError("");
   };
   const load = async (next: TeamContext, switching = false) => {
+    const owner = identity.current;
+    if (!owner) return;
     const guard = session.current.switch();
     const epoch = ++generation.current;
     clearReviews(switching);
@@ -134,8 +138,8 @@ function App() {
       setQuery("");
       setMode("overview");
       setDepth(1);
-      setProfile(loadProfile(next.id, next.key));
-      localStorage.setItem("lge-selected-team", next.id);
+      setProfile(loadProfile(owner, next.id, next.key));
+      localStorage.setItem(preferenceKey(owner, "selected-team"), next.id);
     }
     try {
       const data = await syncGraph(next, undefined, guard.signal, (s) => {
@@ -159,11 +163,13 @@ function App() {
     setBusy(true);
     setProgress("发现可访问的团队…");
     try {
+      const owner = await discoverIdentity(undefined, c.signal);
       const all = await discoverTeams(undefined, c.signal);
       c.signal.throwIfAborted();
+      identity.current = owner;
       setTeams(all);
       const restored =
-        all.find((t) => t.id === localStorage.getItem("lge-selected-team")) ||
+        all.find((t) => t.id === localStorage.getItem(preferenceKey(owner, "selected-team"))) ||
         all[0];
       if (restored) await load(restored, true);
       else {
@@ -204,6 +210,8 @@ function App() {
     discoveryAbort.current.abort();
     clearReviews();
     disconnect();
+    identity.current = null;
+    setFilter(initialFilters); setQuery(""); setProgress("");
     setProfiles(false);
     setProfile(defaultProfile("", ""));
     setConnected(false);
@@ -932,7 +940,7 @@ function App() {
                       {reviewBusy ? "读取中…" : "刷新筛选任务的审阅"}
                     </button>
                     <span>
-                      当前入审状态的任务 · {queue.length} 项
+                      按当前账号在本浏览器配置的审阅策略计算 · 当前入审状态的任务 · {queue.length} 项
                     </span>
                   </div>
                   {reviewError && (
@@ -1119,11 +1127,17 @@ function App() {
         <ProfileEditor
           key={team.id}
           value={profile}
+          onLegacy={identity.current && localStorage.getItem(`lge-profile:${team.id}`) !== null ? () => {
+            if (!identity.current || teamRef.current?.id !== team.id) throw new Error("会话已改变。");
+            const restored = importLegacyProfile(identity.current, team.id);
+            clearReviews(); setProfile(restored);
+            return restored;
+          } : undefined}
           graph={graph}
           onClose={() => setProfiles(false)}
           onSave={(p) => {
             clearReviews();
-            saveProfile(p);
+            if (identity.current) saveProfile(identity.current, p);
             setProfile(p);
           }}
         />
@@ -1162,9 +1176,10 @@ function App() {
             </div>
             <button
               className="button primary full"
+              disabled={!liveOAuthAllowed()}
               onClick={() => login(client).catch((e) => setError(e.message))}
             >
-              使用 Linear 授权
+              {liveOAuthAllowed() ? "使用 Linear 授权" : "当前地址仅支持合成演示"}
             </button>
             <p className="fine">
               令牌仅保存在内存；重载后需重新授权。Team

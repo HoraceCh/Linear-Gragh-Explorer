@@ -36,7 +36,7 @@ export const directTransport: Transport = async (query, variables, signal) => {
     signal?.throwIfAborted();
     const token = await accessToken();
     const r = await fetch("https://api.linear.app/graphql", {
-      method: "POST",
+      method: "POST", cache: "no-store", credentials: "omit",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -323,4 +323,14 @@ export async function discoverTeams(
         )
       ).teams,
   );
+}
+
+
+export async function discoverIdentity(transport: Transport = directTransport, signal?: AbortSignal) {
+  const data = await transport("query SessionIdentity { viewer { id organization { id } } }", {}, signal);
+  signal?.throwIfAborted();
+  const userId = data?.viewer?.id, workspaceId = data?.viewer?.organization?.id;
+  if (typeof userId !== "string" || !userId || typeof workspaceId !== "string" || !workspaceId)
+    throw new LinearAccessError("无法确认当前 Linear 账号与工作区，请重新连接。");
+  return { userId, workspaceId };
 }

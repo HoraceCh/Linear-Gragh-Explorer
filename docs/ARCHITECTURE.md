@@ -46,3 +46,7 @@ No GraphQL mutations, shared tokens, secret-backed bypasses, external telemetry 
 ## v0.3 interaction and layout lifecycle
 
 The compact filters and dashboard drill-down share the same criteria. Current review queue membership uses configured workflow state IDs. Dialogs keep keyboard focus and restore it on close. Worker lifetime is owned by the graph canvas. A superseded job can release its worker while completed jobs allow reuse. Viewport functions separate readable reset, overview and selection. Browser tests exercise the production bundle with synthetic task graphs.
+
+## v0.3.x
+
+v0.3.1 在同步前查询 viewer.id 与 viewer.organization.id，以两者和 Team ID 划分配置。应用和 ELK 继续运行在浏览器。详细边界见 [OAuth 安全](OAUTH-SECURITY.md)。

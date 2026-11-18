@@ -1,3 +1,4 @@
+import { preferenceKey, type Identity } from "../team/identity";
 export interface RoleDefinition {
   id: string;
   name: string;
@@ -116,19 +117,29 @@ export function validateProfile(value: unknown, teamId: string): TeamProfile {
       : {}),
   };
 }
-export function loadProfile(id: string, key: string) {
+export function loadProfile(identity: Identity, id: string, key: string) {
   try {
     return validateProfile(
-      JSON.parse(localStorage.getItem(`lge-profile:${id}`) || "null"),
+      JSON.parse(localStorage.getItem(preferenceKey(identity, "profile", id)) || "null"),
       id,
     );
   } catch {
     return defaultProfile(id, key);
   }
 }
-export function saveProfile(p: TeamProfile) {
+export function saveProfile(identity: Identity, p: TeamProfile) {
   localStorage.setItem(
-    `lge-profile:${p.teamId}`,
+    preferenceKey(identity, "profile", p.teamId),
     JSON.stringify(validateProfile(p, p.teamId)),
   );
+}
+
+// v0.3.0 did not record an owner. Migration requires an explicit local choice.
+export function importLegacyProfile(identity: Identity, teamId: string) {
+  const raw = localStorage.getItem(`lge-profile:${teamId}`);
+  if (!raw) throw new Error("此设备没有该团队的旧版配置。");
+  const profile = validateProfile(JSON.parse(raw), teamId);
+  saveProfile(identity, profile);
+  localStorage.removeItem(`lge-profile:${teamId}`);
+  return profile;
 }

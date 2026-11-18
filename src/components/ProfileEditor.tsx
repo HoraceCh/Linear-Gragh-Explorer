@@ -9,11 +9,12 @@ import {
 export function ProfileEditor({
   value,
   graph,
-  onSave,
+  onSave, onLegacy,
   onClose,
 }: {
   value: TeamProfile;
   graph: Graph;
+  onLegacy?: () => TeamProfile;
   onSave: (p: TeamProfile) => void;
   onClose: () => void;
 }) {
@@ -57,9 +58,14 @@ export function ProfileEditor({
           </button>
         </div>
         <p>
-          仅保存在此浏览器。配置不会自动分享；导出文件含你选择的成员/标签
+          当前工作区、账号和团队的浏览器本地配置。配置不会自动分享；导出文件含你选择的成员/标签
           ID，请妥善保存。
         </p>
+        {onLegacy && <details><summary>迁移此设备的旧版配置</summary>
+          <p>旧版本没有记录配置所有者。如果这是你在此设备创建的配置，可以将它迁入当前账号，替换当前团队策略。共享设备上请使用自己的导出文件。</p>
+          <button className="button" onClick={() => {
+            try { setP(onLegacy()); setError(""); } catch (e) { setError((e as Error).message); }
+          }}>确认这是我的配置并迁移</button></details>}
         {error && (
           <div className="notice error" role="alert">
             {error}
