@@ -24,16 +24,16 @@ for (const width of [375, 390, 768, 1280, 1440]) {
       await workspace.getByLabel("搜索项目任务").fill("no-match-ever");
       await expect(workspace.getByText("当前没有匹配任务。")).toBeVisible();
       await workspace.getByLabel("搜索项目任务").fill("");
-      await activate(workspace.locator(".task-row").first());
+      await activate(workspace.locator(".project-task-row").first());
       await activate(button("关闭详情"));
       await activate(button("返回项目索引"));
       await expect(index).toBeVisible();
       await activate(button("团队总览"));
       await expect(index).toHaveCount(0);
-      await activate(button("团队配置"));
+      await activate(button("视图与审阅设置"));
       await expect(page.getByRole("dialog")).toBeVisible();
       await page.keyboard.press("Escape");
-      await expect(button("团队配置")).toBeFocused();
+      await expect(button("视图与审阅设置")).toBeFocused();
       await activate(button("层级视图"));
       await expect(page.getByLabel("全部角色")).toBeHidden();
       await activate(page.getByText("更多筛选",{exact:true}));
@@ -148,4 +148,19 @@ test("wheel anchors zoom at cursor and middle drag pans only the canvas", async 
   await expect(page.locator(".react-flow__minimap")).toBeVisible();
   await page.locator(".react-flow__node").first().click();
   await expect(button("关闭详情")).toBeVisible();
+});
+
+
+test("review queue finds In Review candidates independently of hierarchy search", async ({page}) => {
+ const button=name=>page.getByRole("button",{name,exact:true});
+ await page.goto("./");
+ await button("体验合成演示").click();
+ await button("层级视图").click();
+ await page.getByLabel("搜索任务").fill("no-such-task");
+ await button("审阅队列").click();
+ const queue=page.getByRole("region",{name:"审阅队列"});
+ await expect(queue).toBeVisible();
+ await expect(queue.getByText(/In Review 候选/)).toBeVisible();
+ await expect(queue.getByText("DEMO-12")).toBeVisible();
+ await expect(queue.getByText(/尚未启用审阅规则/)).toBeVisible();
 });
