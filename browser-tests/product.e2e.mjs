@@ -7,6 +7,7 @@ for (const width of [375, 390, 768, 1280, 1440]) {
       const button = name => page.getByRole("button", {name, exact:true});
       const activate = locator => width < 800 ? locator.tap() : locator.click();
       await page.goto("./");
+      await expect(page.locator("footer.app-footer")).toContainText("© 2026 Horace Chan");
       await activate(button("体验合成演示"));
       await expect(page.getByRole("region",{name:"项目索引"})).toHaveCount(0);
       await activate(button("项目探索"));
