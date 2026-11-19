@@ -991,16 +991,29 @@ function App() {
               )}
             </>
           )}
-          <footer>
-            <span>
-              <ShieldCheck size={13} />
-              所选团队隔离 · 只读 GraphQL · v{version} {import.meta.env.VITE_BUILD_SHA} · {location.hostname.endsWith(".vercel.app") ? "Vercel" : location.hostname.endsWith(".github.io") ? "GitHub Pages" : location.hostname.endsWith(".chatgpt.site") ? "ChatGPT Site" : "本地环境"}
-            </span>
-            <span>
-              {graph.syncedAt
-                ? `上次完整同步 ${new Date(graph.syncedAt).toLocaleString("zh-CN")}`
-                : "尚未完成同步"}
-            </span>
+          <footer className="app-footer">
+            <div className="app-footer-status">
+              <span>
+                <ShieldCheck size={13} />
+                所选团队隔离 · 只读 GraphQL · v{version} {import.meta.env.VITE_BUILD_SHA} · {location.hostname.endsWith(".vercel.app") ? "Vercel" : location.hostname.endsWith(".github.io") ? "GitHub Pages" : location.hostname.endsWith(".chatgpt.site") ? "ChatGPT Site" : "本地环境"}
+              </span>
+              <span>
+                {graph.syncedAt
+                  ? `上次完整同步 ${new Date(graph.syncedAt).toLocaleString("zh-CN")}`
+                  : "尚未完成同步"}
+              </span>
+            </div>
+            <p className="app-footer-legal">
+              © 2026 Horace Chan · 版权所有 · 本项目依据{" "}
+              <a
+                href="https://github.com/HoraceCh/Linear-Gragh-Explorer/blob/main/LICENSE"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                MIT License
+              </a>{" "}
+              开源
+            </p>
           </footer>
         </section>
       </main>
