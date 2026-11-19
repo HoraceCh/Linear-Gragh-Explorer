@@ -1,20 +1,25 @@
 import { useState } from "react";
 import type { Graph } from "../model";
-import { defaultMarkers, defaultProfile, validateProfile, type TeamProfile } from "../profiles/model";
+import { defaultMarkers, defaultProfile, invalidReviewReferences, validateProfile, type TeamProfile } from "../profiles/model";
 type Policy=NonNullable<TeamProfile["reviewPolicy"]>;
 const toggle=(values:string[],id:string)=>values.includes(id)?values.filter(v=>v!==id):[...values,id];
 
 export function ProfileEditor({value,graph,onSave,onLegacy,onClose}:{value:TeamProfile;graph:Graph;onLegacy?:()=>TeamProfile;onSave:(p:TeamProfile)=>void;onClose:()=>void}){
  const [p,setP]=useState(()=>structuredClone(value)),[error,setError]=useState("");
  const inferred=(graph.states||[]).filter(s=>/^(?:in\s+)?review$/i.test(s.name.trim())).map(s=>s.id);
- const policy:Policy=p.reviewPolicy?{...p.reviewPolicy,inReviewStateIds:p.reviewPolicy.inReviewStateIds.length?p.reviewPolicy.inReviewStateIds:inferred}:{enabled:false,requiredApprovals:2,eligibleReviewerIds:[],excludeAssignee:true,inReviewStateIds:inferred,markers:defaultMarkers};
+ const policy:Policy=p.reviewPolicy ?? {enabled:false,requiredApprovals:2,eligibleReviewerIds:[],excludeAssignee:true,inReviewStateIds:inferred,markers:defaultMarkers};
  const update=(patch:Partial<Policy>)=>setP({...p,reviewPolicy:{...policy,...patch}});
- const save=()=>{try{onSave(validateProfile({...p,reviewPolicy:policy},p.teamId));onClose();}catch(e){setError((e as Error).message);}};
+ const invalid = invalidReviewReferences(policy,graph);
+ const save=()=>{try{if(invalid) throw new Error(invalid);onSave(validateProfile({...p,reviewPolicy:policy},p.teamId));onClose();}catch(e){setError((e as Error).message);}};
  const exportProfile=()=>{try{const safe=validateProfile({...p,reviewPolicy:policy},p.teamId);const url=URL.createObjectURL(new Blob([JSON.stringify(safe,null,2)],{type:"application/json"}));const a=document.createElement("a");a.href=url;a.download="linear-graph-explorer-profile.json";a.click();URL.revokeObjectURL(url);}catch(e){setError((e as Error).message);}};
  return <div className="modal-backdrop"><section className="modal profile-modal" role="dialog" aria-modal="true" aria-label="视图与审阅设置" onKeyDown={e=>{if(e.key==="Escape")onClose();}}>
   <div className="section-heading"><div><span className="eyebrow">PERSONAL WORKSPACE SETTINGS</span><h2>视图与审阅设置 · {p.teamKey}</h2></div><button className="button small" onClick={onClose}>关闭</button></div>
   <p className="profile-intro">这里配置的是当前账号在本浏览器中的显示偏好和审阅规则，不会修改 Linear 团队权限，也不会自动同步给其他成员。需要共享规则时，可导出配置并通过团队私有渠道分享，再由成员导入。</p>
   {onLegacy&&<details className="profile-panel"><summary>迁移此设备的旧版配置</summary><p>旧版本没有记录配置所有者。只有确认这是你在此设备创建的配置时才迁移。</p><button className="button" onClick={()=>{try{setP(onLegacy());setError("");}catch(e){setError((e as Error).message);}}}>确认归属并迁移</button></details>}
+  {invalid&&<div className="notice error" role="alert">{invalid} <button className="button" onClick={()=>update({
+    eligibleReviewerIds:policy.eligibleReviewerIds.filter(id=>graph.members?.some(m=>m.id===id)),
+    inReviewStateIds:policy.inReviewStateIds.filter(id=>graph.states?.some(s=>s.id===id))
+  })}>移除失效选择</button></div>}
   {error&&<div className="notice error" role="alert">{error}</div>}
   <section className="profile-panel">
    <div className="profile-panel-heading"><div><h3>审阅规则</h3><p>定义应用如何解释 Linear 中的正式审阅评论。</p></div><span className={policy.enabled?"profile-state profile-state-on":"profile-state"}>{policy.enabled?"已启用":"未启用"}</span></div>

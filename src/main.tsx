@@ -35,7 +35,7 @@ import {
 import type { TeamContext } from "./team/types";
 import { TeamSession } from "./team/session";
 import {
-  loadProfile, importLegacyProfile,
+  loadProfile, importLegacyProfile, invalidReviewReferences,
   saveProfile,
   defaultProfile,
   type TeamProfile,
@@ -125,24 +125,38 @@ function App() {
     if (clearData) setReviews({});
     setReviewError("");
   };
+  const clearTeamView = () => {
+    session.current.clear();
+    generation.current++;
+    clearReviews();
+    teamRef.current = null;
+    setTeam(null);
+    setGraph(emptyGraph());
+    setProfile(defaultProfile("", ""));
+    setProfiles(false);
+    setSelected(null);
+    setDetail(false);
+    setReviewSearch("");
+    setReviewProject("all");
+    setReviewStatus("all");
+    setReviewerFilter("all");
+    setFilter(initialFilters);
+    setQuery("");
+    setMode("overview");
+    setDepth(1);
+  };
   const load = async (next: TeamContext, switching = false) => {
     const owner = identity.current;
     if (!owner) return;
+    if (switching) clearTeamView();
     const guard = session.current.switch();
     const epoch = ++generation.current;
-    clearReviews(switching);
+    if (!switching) clearReviews(false);
     setBusy(true);
     setError("");
     if (switching) {
       teamRef.current = next;
       setTeam(next);
-      setGraph(emptyGraph());
-      setSelected(null);
-      setDetail(false);
-      setFilter(initialFilters);
-      setQuery("");
-      setMode("overview");
-      setDepth(1);
       setProfile(loadProfile(owner, next.id, next.key));
       localStorage.setItem(preferenceKey(owner, "selected-team"), next.id);
     }
@@ -165,6 +179,10 @@ function App() {
     discoveryAbort.current.abort();
     const c = new AbortController();
     discoveryAbort.current = c;
+    clearTeamView();
+    identity.current = null;
+    setTeams([]);
+    setError("");
     setBusy(true);
     setProgress("发现可访问的团队…");
     try {
@@ -210,23 +228,14 @@ function App() {
     localStorage.setItem("lge-theme", dark ? "dark" : "light");
   }, [dark]);
   const reset = () => {
-    session.current.clear();
-    generation.current++;
     discoveryAbort.current.abort();
-    clearReviews();
+    clearTeamView();
     disconnect();
     identity.current = null;
-    setFilter(initialFilters); setQuery(""); setProgress("");
-    setProfiles(false);
-    setProfile(defaultProfile("", ""));
+    setProgress("");
     setConnected(false);
-    setTeam(null);
-    teamRef.current = null;
     setTeams([]);
-    setGraph(emptyGraph());
-    setSelected(null);
     setBusy(false);
-    setDetail(false);
     setError("");
     setMode("overview");
   };
@@ -242,7 +251,9 @@ function App() {
     milestones = graph.items.filter((n) => n.kind === "milestone");
   const diagnostics = useMemo(() => analyze(graph), [graph]),
     summary = useMemo(() => summarize(graph.items), [graph]);
+  const invalidPolicy = useMemo(() => invalidReviewReferences(profile.reviewPolicy, graph), [profile, graph]);
   const reviewResult = (n: Item): ReviewResult =>
+    invalidPolicy ? {status:"Verification Required",required:profile.reviewPolicy?.requiredApprovals || 0,approvals:0,decisions:[],warning:invalidPolicy} :
     reviews[n.id] || calculateReview(profile.reviewPolicy, n.assigneeId, [], undefined, n.stateId);
   const isInReview = (n: Item) => {
     if (n.kind !== "issue" || n.archived) return false;
@@ -301,7 +312,7 @@ function App() {
   const filterCount = Object.values(filter).filter(value => value !== "all").length +
     Number(Boolean(query.trim())) + Number(archived) + Number(!completed);
   const readReviews = async (targets: Item[], force = false) => {
-    if (!team || graph.source === "synthetic" || !profile.reviewPolicy?.enabled)
+    if (!team || invalidPolicy || graph.source === "synthetic" || !profile.reviewPolicy?.enabled)
       return;
     const t = team;
     const policy = profile.reviewPolicy;
@@ -493,7 +504,7 @@ function App() {
               className="button primary"
               disabled={busy || graph.source === "synthetic"}
               onClick={() =>
-                connected && team ? load(team) : setSettings(true)
+                connected ? (team ? load(team) : discover()) : setSettings(true)
               }
             >
               <RefreshCw size={15} className={busy ? "spin" : ""} />
@@ -983,7 +994,7 @@ function App() {
           <footer>
             <span>
               <ShieldCheck size={13} />
-              所选团队隔离 · 只读 GraphQL · v{version}
+              所选团队隔离 · 只读 GraphQL · v{version} {import.meta.env.VITE_BUILD_SHA} · {location.hostname.endsWith(".vercel.app") ? "Vercel" : location.hostname.endsWith(".github.io") ? "GitHub Pages" : location.hostname.endsWith(".chatgpt.site") ? "ChatGPT Site" : "本地环境"}
             </span>
             <span>
               {graph.syncedAt
@@ -1008,6 +1019,7 @@ function App() {
               {[
                 ["负责人", selected.assignee],
                 ["状态", selected.status],
+                ["周期", selected.cycleNumber == null ? undefined : String(selected.cycleNumber)],
                 [
                   "项目",
                   projects.find((p) => p.id === selected.projectId)?.title,

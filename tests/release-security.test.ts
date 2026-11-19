@@ -45,3 +45,13 @@ test("Pages requires the exact registered project path including the slash", () 
   expect(callbackAllowed(entry, entry.slice(0,-1), false)).toBe(false);
   expect(callbackAllowed(entry, entry, false)).toBe(true);
 });
+
+import { invalidReviewReferences } from "../src/profiles/model";
+import { defaultMarkers } from "../src/profiles/model";
+test("a removed reviewer or state invalidates an enabled imported policy", () => {
+  const policy = {enabled:true,requiredApprovals:1,eligibleReviewerIds:["r"],inReviewStateIds:["s"],excludeAssignee:true,markers:defaultMarkers};
+  const directory = {members:[{id:"r"}],states:[{id:"s"}]};
+  expect(invalidReviewReferences(policy,directory)).toBeUndefined();
+  expect(invalidReviewReferences(policy,{...directory,members:[]})).toBeTruthy();
+  expect(invalidReviewReferences(policy,{...directory,states:[]})).toBeTruthy();
+});

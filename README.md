@@ -68,3 +68,10 @@ v0.3.1 候选版支持 Vercel 根目录与 Pages 子路径构建。逐用户配�
 项目探索升级为项目工作区，展示项目指标、状态分布、里程碑进展和全宽任务列表。审阅队列独立发现 In Review 任务，不受其他视图筛选影响；新增 Unable to assess 决策。视图与审阅设置明确区分个人本地配置与 Linear 团队权限。
 
 三端发布规划和验收见 [双目标部署](docs/DUAL-DEPLOYMENT.md)、[部署说明](docs/DEPLOYMENT.md) 和 [发布门禁](docs/RELEASE-READINESS.md)。
+
+
+### 团队成员使用
+
+发布目标为 Vercel 主入口 `https://linegraph.vercel.app/` 和 Pages 入口 `https://horacech.github.io/Linear-Gragh-Explorer/`。以正式 Release 记录判断是否已上线。每人使用自己的 Linear 身份授权，选择团队后等待首次完整同步。项目工作区可按里程碑和负责人查看任务。审阅队列解释当前轮次和有效意见。同步失败时请查看上次成功时间并重试。
+
+视图与审阅设置保存在当前浏览器，按工作区、用户、团队隔离。规则维护人可在团队私有空间保存一份版本化的配置 JSON，成员在对应团队导入并确认成员和状态。两个站点的配置需分别导入。团队成员或状态被移除时，先修复配置再核验审阅结果。

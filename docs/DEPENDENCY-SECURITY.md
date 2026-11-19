@@ -30,3 +30,8 @@ The current GitHub-reviewed advisory identifies picomatch versions through 4.0.7
 - Re-run the full audit against the exact release lockfile before Vercel Production or Pages publication.
 
 Primary sources: [GitHub advisory GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf), [NVD CVE-2026-112366](https://nvd.nist.gov/vuln/detail/CVE-2026-112366).
+
+
+### v0.3.3 release recheck
+
+GitHub withdrew GHSA-fc5q-39xc-vjpf on November 18. The registry initially returned five inherited High findings; a fresh audit of the same lockfile returned zero for both the full tree and production dependencies. The lockfile still resolves picomatch 4.0.7. No override, fork or exception was used. CI checks the full tree on both targets and Pages repeats the check before publishing.

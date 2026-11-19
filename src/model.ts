@@ -21,6 +21,7 @@ export interface Item {
   labels?: string[];
   updatedAt?: string;
   dueDate?: string;
+  cycleNumber?: number;
 }
 export interface Link {
   id: string;

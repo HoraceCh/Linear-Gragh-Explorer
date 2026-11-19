@@ -148,7 +148,7 @@ export async function syncGraph(
     async (cursor) =>
       (
         await request(
-          "query SelectedTeamIssues($team:ID!,$cursor:String){issues(first:50,after:$cursor,includeArchived:true,filter:{team:{id:{eq:$team}}}){nodes{id identifier title description url archivedAt priority team{id} state{id name type} assignee{id name} project{id} projectMilestone{id} parent{id} updatedAt dueDate}pageInfo{hasNextPage endCursor}}}",
+          "query SelectedTeamIssues($team:ID!,$cursor:String){issues(first:50,after:$cursor,includeArchived:true,filter:{team:{id:{eq:$team}}}){nodes{id identifier title description url archivedAt priority team{id} state{id name type} assignee{id name} project{id} projectMilestone{id} parent{id} cycle{number} updatedAt dueDate}pageInfo{hasNextPage endCursor}}}",
           { team: teamId, cursor },
         )
       ).issues,
@@ -177,6 +177,7 @@ export async function syncGraph(
       assigneeId: i.assignee?.id,
       updatedAt: i.updatedAt,
       dueDate: i.dueDate,
+      cycleNumber: i.cycle?.number,
       status: i.state?.name,
       statusType: i.state?.type,
       assignee: i.assignee?.name,
@@ -259,6 +260,7 @@ export async function syncGraph(
   graph.members = metadata[0];
   graph.states = metadata[1];
   graph.labels = metadata[2];
+  const itemsById = new Map(graph.items.map(item => [item.id, item]));
   await boundedMap(
     issues,
     4,
@@ -272,7 +274,7 @@ export async function syncGraph(
             )
           ).labels,
       );
-      const item = graph.items.find((n) => n.id === i.id);
+      const item = itemsById.get(i.id);
       if (item) item.labels = labels.map((l) => l.id);
     },
     signal,
