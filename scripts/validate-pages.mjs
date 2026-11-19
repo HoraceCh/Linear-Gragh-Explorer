@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 // Validate the exact directory handed to upload-pages-artifact.
 // Keep unknown files out of the public bundle until their purpose is reviewed.
 export async function validatePages(directory, base) {
-  if (!/^\/[\w.-]+\/$/.test(base) || ['/../', '/./'].includes(base))
+  if (base !== '/' && !/^\/[\w.-]+\/$/.test(base) || ['/../', '/./'].includes(base))
     throw new Error('Expected an absolute repository base path ending in /.');
   const entries = await readdir(directory, { withFileTypes: true });
   for (const file of entries) {

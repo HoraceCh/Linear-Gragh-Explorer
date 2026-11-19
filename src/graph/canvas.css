@@ -12,3 +12,5 @@
 @media (pointer: coarse) {
   .v2-graph .react-flow__controls-button { min-width: 44px; min-height: 44px; }
 }
+
+.v2-graph { overscroll-behavior: contain; }

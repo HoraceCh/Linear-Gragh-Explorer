@@ -1,3 +1,4 @@
+import { ProjectExplorer } from "./components/ProjectExplorer";
 import { BuildUpdate } from "./components/BuildUpdate";
 import { version } from "../package.json";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -22,9 +23,9 @@ import "./style.css";
 import "./v2.css";
 import { analyze, emptyGraph, type Graph, type Item } from "./model";
 import { demoGraph, scaleGraph } from "./demo";
-import { syncGraph, discoverTeams, boundedMap, LinearAccessError } from "./api";
+import { syncGraph, discoverIdentity, discoverTeams, boundedMap, LinearAccessError } from "./api";
 import {
-  configuredClient,
+  configuredClient, liveOAuthAllowed,
   login,
   finishLogin,
   disconnect,
@@ -34,7 +35,7 @@ import {
 import type { TeamContext } from "./team/types";
 import { TeamSession } from "./team/session";
 import {
-  loadProfile,
+  loadProfile, importLegacyProfile, invalidReviewReferences,
   saveProfile,
   defaultProfile,
   type TeamProfile,
@@ -53,6 +54,7 @@ import { ProfileEditor } from "./components/ProfileEditor";
 import { ReviewBadge } from "./components/ReviewBadge";
 import { summarize, isActive, dependencyImpact } from "./analytics";
 import { useDialogFocus } from "./components/DialogFocus";
+import { preferenceKey, type Identity } from "./team/identity";
 const modes = [
   ["overview", "团队总览", LayoutDashboard],
   ["project", "项目探索", FolderOpen],
@@ -94,6 +96,10 @@ function App() {
     [reviews, setReviews] = useState<Record<string, ReviewResult>>({}),
     [reviewBusy, setReviewBusy] = useState(false),
     [reviewError, setReviewError] = useState(""),
+    [reviewSearch, setReviewSearch] = useState(""),
+    [reviewProject, setReviewProject] = useState("all"),
+    [reviewStatus, setReviewStatus] = useState<ReviewStatus | "all">("all"),
+    [reviewerFilter, setReviewerFilter] = useState("all"),
     [filter, setFilter] = useState(initialFilters),
     [query, setQuery] = useState(""),
     [archived, setArchived] = useState(false),
@@ -108,6 +114,7 @@ function App() {
     teamRef = useRef<TeamContext | null>(null),
     generation = useRef(0),
     reviewGen = useRef(0);
+  const identity = useRef<Identity | null>(null);
   const discoveryAbort = useRef(new AbortController());
   const clearReviews = (clearData = true) => {
     reviewAbort.current.abort();
@@ -118,24 +125,40 @@ function App() {
     if (clearData) setReviews({});
     setReviewError("");
   };
+  const clearTeamView = () => {
+    session.current.clear();
+    generation.current++;
+    clearReviews();
+    teamRef.current = null;
+    setTeam(null);
+    setGraph(emptyGraph());
+    setProfile(defaultProfile("", ""));
+    setProfiles(false);
+    setSelected(null);
+    setDetail(false);
+    setReviewSearch("");
+    setReviewProject("all");
+    setReviewStatus("all");
+    setReviewerFilter("all");
+    setFilter(initialFilters);
+    setQuery("");
+    setMode("overview");
+    setDepth(1);
+  };
   const load = async (next: TeamContext, switching = false) => {
+    const owner = identity.current;
+    if (!owner) return;
+    if (switching) clearTeamView();
     const guard = session.current.switch();
     const epoch = ++generation.current;
-    clearReviews(switching);
+    if (!switching) clearReviews(false);
     setBusy(true);
     setError("");
     if (switching) {
       teamRef.current = next;
       setTeam(next);
-      setGraph(emptyGraph());
-      setSelected(null);
-      setDetail(false);
-      setFilter(initialFilters);
-      setQuery("");
-      setMode("overview");
-      setDepth(1);
-      setProfile(loadProfile(next.id, next.key));
-      localStorage.setItem("lge-selected-team", next.id);
+      setProfile(loadProfile(owner, next.id, next.key));
+      localStorage.setItem(preferenceKey(owner, "selected-team"), next.id);
     }
     try {
       const data = await syncGraph(next, undefined, guard.signal, (s) => {
@@ -156,14 +179,20 @@ function App() {
     discoveryAbort.current.abort();
     const c = new AbortController();
     discoveryAbort.current = c;
+    clearTeamView();
+    identity.current = null;
+    setTeams([]);
+    setError("");
     setBusy(true);
     setProgress("发现可访问的团队…");
     try {
+      const owner = await discoverIdentity(undefined, c.signal);
       const all = await discoverTeams(undefined, c.signal);
       c.signal.throwIfAborted();
+      identity.current = owner;
       setTeams(all);
       const restored =
-        all.find((t) => t.id === localStorage.getItem("lge-selected-team")) ||
+        all.find((t) => t.id === localStorage.getItem(preferenceKey(owner, "selected-team"))) ||
         all[0];
       if (restored) await load(restored, true);
       else {
@@ -199,21 +228,14 @@ function App() {
     localStorage.setItem("lge-theme", dark ? "dark" : "light");
   }, [dark]);
   const reset = () => {
-    session.current.clear();
-    generation.current++;
     discoveryAbort.current.abort();
-    clearReviews();
+    clearTeamView();
     disconnect();
-    setProfiles(false);
-    setProfile(defaultProfile("", ""));
+    identity.current = null;
+    setProgress("");
     setConnected(false);
-    setTeam(null);
-    teamRef.current = null;
     setTeams([]);
-    setGraph(emptyGraph());
-    setSelected(null);
     setBusy(false);
-    setDetail(false);
     setError("");
     setMode("overview");
   };
@@ -229,8 +251,16 @@ function App() {
     milestones = graph.items.filter((n) => n.kind === "milestone");
   const diagnostics = useMemo(() => analyze(graph), [graph]),
     summary = useMemo(() => summarize(graph.items), [graph]);
+  const invalidPolicy = useMemo(() => invalidReviewReferences(profile.reviewPolicy, graph), [profile, graph]);
   const reviewResult = (n: Item): ReviewResult =>
-    reviews[n.id] || calculateReview(profile.reviewPolicy, n.assigneeId, []);
+    invalidPolicy ? {status:"Verification Required",required:profile.reviewPolicy?.requiredApprovals || 0,approvals:0,decisions:[],warning:invalidPolicy} :
+    reviews[n.id] || calculateReview(profile.reviewPolicy, n.assigneeId, [], undefined, n.stateId);
+  const isInReview = (n: Item) => {
+    if (n.kind !== "issue" || n.archived) return false;
+    const stateName = (graph.states?.find((state) => state.id === n.stateId)?.name || n.status || "").trim().toLowerCase();
+    return Boolean(profile.reviewPolicy?.inReviewStateIds.includes(n.stateId || "") || stateName === "in review" || stateName === "review");
+  };
+  const reviewCandidates = useMemo(() => issues.filter(isInReview), [issues, graph.states, profile.reviewPolicy]);
   const workstreams = (n: Item) => {
     const values = (n.labels || [])
       .map((id) => profile.workstreamLabelMap[id])
@@ -269,9 +299,11 @@ function App() {
       ),
     [graph, filter, archived, completed, profile, reviews],
   );
-  const queue = visible.filter(n =>
-    (!profile.reviewPolicy?.enabled || profile.reviewPolicy.inReviewStateIds.includes(n.stateId || "")) &&
-    `${n.identifier} ${n.title}`.toLowerCase().includes(query.trim().toLowerCase())
+  const queue = reviewCandidates.filter((n) =>
+    (reviewProject === "all" || n.projectId === reviewProject) &&
+    (reviewStatus === "all" || reviewResult(n).status === reviewStatus) &&
+    (reviewerFilter === "all" || reviewResult(n).decisions.some((d) => d.reviewerId === reviewerFilter)) &&
+    `${n.identifier} ${n.title} ${n.assignee || ""}`.toLowerCase().includes(reviewSearch.trim().toLowerCase())
   );
   const matchesSearch = (n: Item) => `${n.identifier} ${n.title}`.toLowerCase().includes(query.trim().toLowerCase());
   const resetFilters = () => {
@@ -280,7 +312,7 @@ function App() {
   const filterCount = Object.values(filter).filter(value => value !== "all").length +
     Number(Boolean(query.trim())) + Number(archived) + Number(!completed);
   const readReviews = async (targets: Item[], force = false) => {
-    if (!team || graph.source === "synthetic" || !profile.reviewPolicy?.enabled)
+    if (!team || invalidPolicy || graph.source === "synthetic" || !profile.reviewPolicy?.enabled)
       return;
     const t = team;
     const policy = profile.reviewPolicy;
@@ -314,15 +346,12 @@ function App() {
   };
   useEffect(() => {
     if (!graph.syncedAt || !profile.reviewPolicy?.enabled) return;
-    const pending = issues.filter((n) =>
-      profile.reviewPolicy!.inReviewStateIds.includes(n.stateId || ""),
-    );
-    if (pending.length) void readReviews(pending);
-  }, [graph.syncedAt, profile]);
+    if (reviewCandidates.length) void readReviews(reviewCandidates);
+  }, [graph.syncedAt, profile, reviewCandidates]);
   const select = (n: Item) => {
     setSelected(n);
     setDetail(true);
-    if (n.kind === "issue" && !reviews[n.id]) void readReviews([n]);
+    if (n.kind === "issue" && isInReview(n) && !reviews[n.id]) void readReviews([n]);
   };
   const updateFilter = (key: keyof typeof filter, value: string) =>
     setFilter((f) => ({ ...f, [key]: value }));
@@ -406,7 +435,7 @@ function App() {
               aria-current={mode === id ? "page" : undefined}
               title={label}
               className={mode === id ? "active" : ""}
-              onClick={() => setMode(id)}
+              onClick={() => { if (id === "project") resetFilters(); setMode(id); }}
             >
               <Icon size={18} />
               {label}
@@ -419,8 +448,8 @@ function App() {
             <button
               key={p.id}
               onClick={() => {
-                updateFilter("project", p.id);
-                setMode("hierarchy");
+                resetFilters(); updateFilter("project", p.id);
+                setMode("project");
               }}
             >
               {p.title}
@@ -450,7 +479,7 @@ function App() {
               disabled={!team}
               onClick={() => setProfiles(true)}
             >
-              团队配置
+              视图与审阅设置
             </button>
             <button className="button small" onClick={() => setSettings(true)}>
               <SlidersHorizontal size={14} />
@@ -475,7 +504,7 @@ function App() {
               className="button primary"
               disabled={busy || graph.source === "synthetic"}
               onClick={() =>
-                connected && team ? load(team) : setSettings(true)
+                connected ? (team ? load(team) : discover()) : setSettings(true)
               }
             >
               <RefreshCw size={15} className={busy ? "spin" : ""} />
@@ -545,7 +574,7 @@ function App() {
             </div>
           ) : (
             <>
-              {(isGraph || mode === "hierarchy" || mode === "reviews") && (
+              {(isGraph || mode === "hierarchy") && (
                 <div className="filter-bar">
                   <label className="search">
                     <input
@@ -613,7 +642,10 @@ function App() {
                   </div></details>
                 </div>
               )}
-              {(mode === "overview" || mode === "project") && (
+              {mode === "project" && <ProjectExplorer key={JSON.stringify([team?.id,filter.project])} projects={projects} milestones={milestones} issues={issues}
+                blocked={diagnostics.blocked} projectId={filter.project} open={select} choose={id=>updateFilter("project",id)}
+                explore={(next, projectId) => { setFilter({ ...initialFilters, project: projectId }); setMode(next); }} />}
+              {mode === "overview" && (
                 <>
                   <div className="stats">
                     {[
@@ -624,7 +656,7 @@ function App() {
                     ].map(([n, label, subset]) => (
                       <button className="stat" key={label} onClick={() => {
                         resetFilters();
-                        if (subset === "projects") {document.getElementById("project-list")?.scrollIntoView(); return;}
+                        if (subset === "projects") {setMode("project"); return;}
                         setFilter({...initialFilters, subset: String(subset)});
                         setMode("hierarchy");
                       }}>
@@ -737,8 +769,8 @@ function App() {
                           className="project-card"
                           key={p.id}
                           onClick={() => {
-                            updateFilter("project", p.id);
-                            setMode("hierarchy");
+                            resetFilters(); updateFilter("project", p.id);
+                            setMode("project");
                           }}
                         >
                           <FolderOpen size={23} />
@@ -913,60 +945,47 @@ function App() {
                 </>
               )}
               {mode === "reviews" && (
-                <section className="review-queue">
-                  <div className="graph-actions">
-                    {options(
-                      "全部审阅状态",
-                      "review",
-                      Object.entries(reviewLabels).map(([id, name]) => ({
-                        id,
-                        name,
-                      })),
-                    )}
-                    {options("全部审阅人", "reviewer", graph.members || [])}
-                    <button
-                      className="button small"
-                      disabled={reviewBusy || !profile.reviewPolicy?.enabled}
-                      onClick={() => readReviews(queue, true)}
-                    >
-                      {reviewBusy ? "读取中…" : "刷新筛选任务的审阅"}
-                    </button>
-                    <span>
-                      当前入审状态的任务 · {queue.length} 项
-                    </span>
+                <section className="review-queue" aria-label="审阅队列">
+                  <div className="review-queue-heading">
+                    <div><span className="eyebrow">REVIEW INTELLIGENCE</span><h2>审阅队列</h2>
+                      <p>自动发现当前处于 In Review 的任务。是否通过仍须按当前账号的审阅规则和本轮状态历史核验。</p></div>
+                    <button className="button small" disabled={reviewBusy || !profile.reviewPolicy?.enabled || !reviewCandidates.length}
+                      onClick={() => readReviews(reviewCandidates, true)}>{reviewBusy ? "读取中…" : "刷新全部审阅证据"}</button>
                   </div>
-                  {reviewError && (
-                    <div className="notice error">{reviewError}</div>
-                  )}
-                  {!profile.reviewPolicy?.enabled && (
-                    <div className="notice">
-                      未配置审阅策略。请在团队配置中选择审阅人和真实 In Review
-                      状态。
-                    </div>
-                  )}
-                  <div className="task-list">
-                    {queue.length === 0 && <p role="status">当前筛选下没有待审阅任务。</p>}
-                    {queue.map((n) => (
-                        <button
-                          className="task-row"
-                          key={n.id}
-                          onClick={() => select(n)}
-                        >
-                          <span>
-                            <small>
-                              {n.identifier} · {n.assignee || "未分配"}
-                            </small>
-                            <strong>{n.title}</strong>
-                            {profile.reviewPolicy?.enabled && reviews[n.id]?.boundary && <small>
-                              待表态：{profile.reviewPolicy.eligibleReviewerIds.filter(id =>
-                                !(profile.reviewPolicy?.excludeAssignee && id === n.assigneeId) &&
-                                !reviews[n.id].decisions.some(d => d.reviewerId === id)
-                              ).map(id => graph.members?.find(m => m.id === id)?.name || "成员").join("、") || "无"}
-                            </small>}
-                          </span>
-                          <ReviewBadge result={reviewResult(n)} />
-                        </button>
-                      ))}
+                  <div className="review-queue-summary">
+                    <div><span>In Review 候选</span><strong>{reviewCandidates.length}</strong></div>
+                    <div><span>当前筛选</span><strong>{queue.length}</strong></div>
+                    <div><span>审阅通过</span><strong>{reviewCandidates.filter(n => reviewResult(n).status === "Review Passed").length}</strong></div>
+                    <div><span>需要处理</span><strong>{reviewCandidates.filter(n => reviewResult(n).status !== "Review Passed").length}</strong></div>
+                  </div>
+                  <div className="review-queue-controls">
+                    <input aria-label="搜索审阅任务" placeholder="搜索任务编号或标题…" value={reviewSearch} onChange={e=>setReviewSearch(e.target.value)} />
+                    <select aria-label="审阅项目筛选" value={reviewProject} onChange={e=>setReviewProject(e.target.value)}>
+                      <option value="all">全部项目</option>{projects.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}
+                    </select>
+                    <select aria-label="审阅结果筛选" value={reviewStatus} onChange={e=>setReviewStatus(e.target.value as ReviewStatus|"all")}>
+                      <option value="all">全部审阅结果</option>{Object.entries(reviewLabels).map(([id,label])=><option key={id} value={id}>{label}</option>)}
+                    </select>
+                    <select aria-label="审阅人筛选" value={reviewerFilter} onChange={e=>setReviewerFilter(e.target.value)}>
+                      <option value="all">全部审阅人</option>{(graph.members||[]).map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  </div>
+                  {reviewError && <div className="notice error" role="alert">{reviewError}</div>}
+                  {!profile.reviewPolicy?.enabled && <div className="notice">已发现 In Review 任务，但当前账号尚未启用审阅规则。你仍可浏览候选任务；配置审阅人和状态后，应用才会计算评论证据。</div>}
+                  {profile.reviewPolicy?.enabled && !profile.reviewPolicy.eligibleReviewerIds.length && <div className="notice">尚未选择合格审阅人。当前不会有任何成员的评论被计为批准。</div>}
+                  <details className="review-howto"><summary>如何在 Linear 提交审阅意见</summary>
+                    <p>在当前轮次的顶层任务评论中单独写出决定，下一行可以补充说明。</p>
+                    <p>批准：Approved / Approved with comments；要求修改：Request changes / Changes requested；暂缓：Hold / On hold；无法判断：Unable to assess。</p>
+                    <p>每位审阅人只保留本轮最新决定；重新进入 In Review 后，旧轮次评论不会自动沿用。</p>
+                  </details>
+                  <div className="task-list review-task-list">
+                    {!reviewCandidates.length && <div className="project-empty" role="status">当前团队没有检测到 In Review 任务。请检查 Linear 状态名称并刷新团队数据。</div>}
+                    {reviewCandidates.length>0&&!queue.length && <div className="project-empty" role="status">没有符合当前队列筛选的任务。</div>}
+                    {queue.map(n=><button className="task-row review-task-row" key={n.id} onClick={()=>select(n)}>
+                      <span className="review-task-main"><small>{n.identifier} · {projects.find(p=>p.id===n.projectId)?.title||"未归属项目"} · {n.assignee||"未分配负责人"}</small>
+                        <strong>{n.title}</strong><small>{reviewResult(n).boundary?"本轮开始 "+new Date(reviewResult(n).boundary!).toLocaleString("zh-CN"):"本轮边界尚未确认"}</small></span>
+                      <ReviewBadge result={reviewResult(n)}/>
+                    </button>)}
                   </div>
                 </section>
               )}
@@ -975,7 +994,7 @@ function App() {
           <footer>
             <span>
               <ShieldCheck size={13} />
-              所选团队隔离 · 只读 GraphQL · v{version}
+              所选团队隔离 · 只读 GraphQL · v{version} {import.meta.env.VITE_BUILD_SHA} · {location.hostname.endsWith(".vercel.app") ? "Vercel" : location.hostname.endsWith(".github.io") ? "GitHub Pages" : location.hostname.endsWith(".chatgpt.site") ? "ChatGPT Site" : "本地环境"}
             </span>
             <span>
               {graph.syncedAt
@@ -1000,6 +1019,7 @@ function App() {
               {[
                 ["负责人", selected.assignee],
                 ["状态", selected.status],
+                ["周期", selected.cycleNumber == null ? undefined : String(selected.cycleNumber)],
                 [
                   "项目",
                   projects.find((p) => p.id === selected.projectId)?.title,
@@ -1075,6 +1095,7 @@ function App() {
             </div>
             </details><details open key={selected.id + "-review"}><summary>审阅证据</summary>
             {reviewError && <p role="alert">{reviewError}</p>}
+            {reviewResult(selected).ignored && Object.entries(reviewResult(selected).ignored || {}).map(([reason,count]) => <p key={reason}>{reason} · {count}</p>)}
             {reviewResult(selected).warning && (
               <p>{reviewResult(selected).warning}</p>
             )}
@@ -1093,7 +1114,7 @@ function App() {
             {reviewResult(selected).decisions.map((d) => (
               <div className="review-decision" key={d.reviewerId}>
                 <b>
-                  {d.name} · {d.decision}
+                  {d.name} · {({approve:"批准",requestChanges:"要求修改",hold:"暂缓",unableToAssess:"无法判断"} as const)[d.decision]}
                 </b>
                 <small>{new Date(d.at).toLocaleString("zh-CN")}</small>
                 <p>{d.excerpt}</p>
@@ -1119,11 +1140,17 @@ function App() {
         <ProfileEditor
           key={team.id}
           value={profile}
+          onLegacy={identity.current && localStorage.getItem(`lge-profile:${team.id}`) !== null ? () => {
+            if (!identity.current || teamRef.current?.id !== team.id) throw new Error("会话已改变。");
+            const restored = importLegacyProfile(identity.current, team.id);
+            clearReviews(); setProfile(restored);
+            return restored;
+          } : undefined}
           graph={graph}
           onClose={() => setProfiles(false)}
           onSave={(p) => {
             clearReviews();
-            saveProfile(p);
+            if (identity.current) saveProfile(identity.current, p);
             setProfile(p);
           }}
         />
@@ -1162,9 +1189,10 @@ function App() {
             </div>
             <button
               className="button primary full"
+              disabled={!liveOAuthAllowed()}
               onClick={() => login(client).catch((e) => setError(e.message))}
             >
-              使用 Linear 授权
+              {liveOAuthAllowed() ? "使用 Linear 授权" : "当前地址仅支持合成演示"}
             </button>
             <p className="fine">
               令牌仅保存在内存；重载后需重新授权。Team

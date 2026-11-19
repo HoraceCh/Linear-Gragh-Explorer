@@ -148,6 +148,24 @@ export function GraphView({
     return () => { observer.disconnect(); window.removeEventListener("resize", measure); };
   }, []);
 
+  useEffect(() => {
+    const el = shell.current;
+    if (!el || !flow) return;
+    const wheel = (e: WheelEvent) => {
+      if (e.ctrlKey || (e.target as Element).closest(".react-flow__panel")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = el.getBoundingClientRect();
+      const factor = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? rect.height : 1;
+      const v = flow.getViewport();
+      const zoom = Math.min(2, Math.max(0.001, v.zoom * Math.exp(-0.00065 * e.deltaY * factor)));
+      const ratio = zoom / v.zoom;
+      const x = e.clientX - rect.left - el.clientLeft, y = e.clientY - rect.top - el.clientTop;
+      void flow.setViewport({ x: x + (v.x - x) * ratio, y: y + (v.y - y) * ratio, zoom });
+    };
+    el.addEventListener("wheel", wheel, { capture: true, passive: false });
+    return () => el.removeEventListener("wheel", wheel, true);
+  }, [flow]);
   const revision = useRef(0);
   const latest = useRef({ projection, graph, mode });
   latest.current = { projection, graph, mode };
@@ -303,6 +321,8 @@ export function GraphView({
         </label>
       </div>
       <div className="graph-shell v2-graph" aria-label="任务关系图" role="region" ref={shell}
+        onMouseDownCapture={e => { if (e.button === 1) e.preventDefault(); }}
+        onAuxClick={e => { if (e.button === 1) e.preventDefault(); }}
         onKeyDown={event => {
           if (event.key !== "Enter" && event.key !== " ") return;
           const element = event.target as HTMLElement;
@@ -325,6 +345,8 @@ export function GraphView({
           onNodeClick={(_, n) => n.data.item && onSelect(n.data.item as Item)}
           minZoom={0.001}
           maxZoom={2}
+          zoomOnScroll={false}
+          panOnDrag={[0, 1]}
           nodesDraggable={false}
           nodesConnectable={false}
           onlyRenderVisibleElements

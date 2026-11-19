@@ -16,11 +16,21 @@ const encode = (bytes: Uint8Array) =>
     .replaceAll("=", "");
 const random = () => encode(crypto.getRandomValues(new Uint8Array(32)));
 export const configuredClient = () =>
-  localStorage.getItem("pvcr-client-id") ||
-  (import.meta as any).env.VITE_LINEAR_CLIENT_ID ||
+  localStorage.getItem("lge-client-id") || localStorage.getItem("pvcr-client-id") ||
+  import.meta.env.VITE_LINEAR_CLIENT_ID ||
   "";
 export const callbackUrl = () => location.origin + location.pathname;
+export function callbackAllowed(current: string, registered: string | undefined, vercel: boolean) {
+  const host = new URL(current).hostname;
+  if (!registered) return !vercel && !host.endsWith(".github.io") && !host.endsWith(".vercel.app");
+  try {
+    const url = new URL(registered);
+    return registered === current && url.href === current && !url.username && !url.password && !url.search && !url.hash && url.protocol === "https:";
+  } catch { return false; }
+}
+export const liveOAuthAllowed = () => callbackAllowed(callbackUrl(), import.meta.env.VITE_LINEAR_REDIRECT_URI, import.meta.env.VITE_VERCEL_HOSTED === "true" || import.meta.env.VITE_DEPLOY_TARGET === "pages");
 export async function login(clientId: string) {
+  if (!liveOAuthAllowed()) throw new Error("此地址未配置固定 OAuth 回调，请使用合成演示或已注册的稳定入口。");
   if (!clientId.trim()) throw new Error("请先配置公开 OAuth Client ID。");
   const verifier = random(),
     state = random();
@@ -39,7 +49,7 @@ export async function login(clientId: string) {
       clientId,
     }),
   );
-  localStorage.setItem("pvcr-client-id", clientId);
+  localStorage.setItem("lge-client-id", clientId);
   location.assign(
     AUTH +
       "?" +
@@ -58,7 +68,7 @@ export async function login(clientId: string) {
 async function exchange(params: Record<string, string>) {
   const generation = authGeneration;
   const r = await fetch(TOKEN, {
-    method: "POST",
+    method: "POST", cache: "no-store", credentials: "omit",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(params),
     signal: AbortSignal.timeout(30000),
@@ -97,6 +107,7 @@ export async function finishLogin() {
   const raw = sessionStorage.getItem("pvcr-oauth");
   sessionStorage.removeItem("pvcr-oauth");
   history.replaceState({}, "", callbackUrl());
+  if (!liveOAuthAllowed()) throw new Error("回调地址不在本部署的授权范围内。");
   if (p.has("error")) throw new Error("Linear 授权未完成。");
   const saved = raw ? JSON.parse(raw) : null;
   if (

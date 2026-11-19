@@ -46,3 +46,13 @@ Stabilization adds coverage for current assignee/state during review, ambiguous 
 ## Product-quality candidate
 
 RC verification passed 101 Vitest checks. The v0.3 candidate adds fixture, viewport and worker lifecycle checks, eight Pages artifact checks and production Chromium tests for responsive navigation, dialog focus, filters, details and dense graph selection. CI runs Chromium independently of private identity. See the current PR checks for browser outcomes.
+
+## v0.3.x
+
+v0.3.1 的新增验证包括身份分区、旧配置迁移、固定回调、浏览器多会话与根路径产物。真实证据清单见 [多用户验收](MULTI-USER-ACCEPTANCE.md)。
+
+将匿名 Preview 的入口、实际哈希资源和分支别名分别检查；记录跳转目标的 origin 和 path，丢弃查询串。登录后再记录应用资源的响应头。
+
+## v0.3.2
+
+CI 按根路径和仓库子路径分别执行单元测试、构建、哈希资源与 Worker 校验，以及 Chromium 回归。浏览器用合成身份校验回调，覆盖五种宽度、项目工作区、滚轮锚点、中键拖动与模拟双指缩放。真实账号和物理设备验收单独记录。

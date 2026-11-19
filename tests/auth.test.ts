@@ -176,3 +176,16 @@ it("distinguishes a temporary refresh interruption from a revoked grant", async 
   await expect(auth.renewSession()).rejects.toBeInstanceOf(LinearAccessError);
   await expect(auth.accessToken()).rejects.toThrow("请连接");
 });
+
+it("consumes a declined transaction and rejects a replay before exchange", async () => {
+  const auth = await import("../src/auth");
+  const exchange = vi.fn();
+  vi.stubGlobal("fetch", exchange);
+  await auth.login("public-test-client");
+  const { state } = JSON.parse(sessionStorage.getItem("pvcr-oauth")!);
+  location.search = "?error=access_denied&state=" + state;
+  await expect(auth.finishLogin()).rejects.toThrow("未完成");
+  location.search = "?code=synthetic&state=" + state;
+  await expect(auth.finishLogin()).rejects.toThrow("状态");
+  expect(exchange).not.toHaveBeenCalled();
+});

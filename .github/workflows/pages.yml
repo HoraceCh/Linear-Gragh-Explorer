@@ -14,25 +14,35 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
+    permissions:
+      contents: read
+      pages: read
     if: inputs.security_accepted && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
+      - run: node --version && npm --version
       - run: npm ci
+      - run: npm audit --audit-level=high
       - run: npm test
       - run: node --test scripts/validate-pages.checks.mjs
-      - run: npm run build
+      - uses: actions/configure-pages@v6
+        id: pages
+      - run: node scripts/validate-host-config.mjs && npm run build
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
+          ACTUAL_PAGES_URL: ${{ steps.pages.outputs.base_url }}/
+          VITE_DEPLOY_TARGET: pages
+          VITE_LINEAR_REDIRECT_URI: ${{ vars.LINEAR_REDIRECT_URI }}
           VITE_LINEAR_CLIENT_ID: ${{ vars.LINEAR_CLIENT_ID }}
       - run: node scripts/validate-pages.mjs dist "$VITE_BASE_PATH"
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
   deploy:
@@ -40,10 +50,10 @@ jobs:
     permissions:
       pages: write
       id-token: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

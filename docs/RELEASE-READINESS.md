@@ -4,7 +4,7 @@
 
 | Decision | Evidence required | Current boundary |
 | --- | --- | --- |
-| Merge a code change | Review of the exact diff, green CI for the proposed head, documented residual risks and owner decision | PR #1 targets main. The v0.3 candidate is stacked on the v0.2 branch. Recheck its base and CI after the first merge. |
+| Merge a code change | Review of the exact diff, green CI for the proposed head, documented residual risks and owner decision | PR #1 and #2 are merged. Review the independent v0.3.1 release branch against main. |
 | Use the owner-private preview | Successful deployment with owner-only access and smoke tests on the deployed build | The previous v0.2 preview passed two-team live testing. Keep subsequent deployment results and commit mappings in the private acceptance report. |
 | Publish the application shell | Explicit release approval, validated public artifact, registered canonical callback, accepted privacy and operational risks | Public deployment is pending. Subpath checks run without contacting Linear or publishing Pages. |
 
@@ -19,3 +19,32 @@ Before authorizing public deployment, verify current provider redirect settings,
 ## Version mapping
 
 Public v0.2 baseline audited from PR #1: `8125c7f893bbff5df8ee88e7304044dfc9d7b62b`. Private hosting uses separate commits and a deployment manifest. Compare application source contents, package lockfile and build inputs before declaring equivalence. Record the paired SHAs and deployment receipt privately. See the PR's final CI status for the candidate under review.
+
+## v0.3.1 发布门禁
+
+保护预览须分别验收别名和部署 URL。内部真实使用须验证稳定 OAuth 回调。合并须审核候选 SHA 与 CI。公开发布另需负责人批准、真实账号权限验证和可恢复部署记录。参考 [多用户验收](MULTI-USER-ACCEPTANCE.md) 与 [回滚](ROLLBACK.md)。
+
+公开发布还须通过完整构建依赖审计。当前 picomatch 的 High 记录与验证范围见 [依赖安全记录](DEPENDENCY-SECURITY.md)。
+
+## v0.3.2
+
+公开双目标上线仍受构建依赖 High、Pages 正式域名与 OAuth 实测、真实双审阅及区域访问验收约束。分支 CI 只验证构建产物。Pages 发布必须由所有者另行批准。
+
+
+## v0.3.3 product and release acceptance
+
+- [ ] Project Explorer uses the full available width and presents project summary, status distribution, milestone progress and task groups.
+- [ ] Project navigation retains project scope when opening hierarchy and dependency views.
+- [ ] Settings identify themselves as personal browser-local preferences; role mapping is optional and has no empty native selectors.
+- [ ] In Review candidates are visible even before a policy is configured and are not hidden by global graph filters.
+- [ ] Unable to assess is distinct from Hold and blocks Review Passed.
+- [ ] Responsive Playwright suite passes for root and Pages base paths.
+- [ ] Latest Vercel Preview is READY at the final reviewed SHA and remains SSO-protected.
+- [ ] Production hostname, SSO policy and exact OAuth callback are verified before Vercel promotion.
+- [ ] Existing private ChatGPT Site remains owner-only.
+- [ ] Actual GitHub Pages hostname, OAuth callback and repository variables are verified before the manual publish workflow is dispatched.
+- [ ] Real two-account private-Team isolation and genuine two-reviewer acceptance are recorded.
+- [ ] Production dependency audit has no High findings; full dependency audit is reviewed without masking development-tool findings.
+- [ ] Owner approves the exact merge SHA, production URLs and rollback target.
+
+This branch remains a draft candidate until every required acceptance item is closed. A READY Preview is not a production release.

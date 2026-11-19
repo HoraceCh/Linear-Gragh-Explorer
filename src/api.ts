@@ -36,7 +36,7 @@ export const directTransport: Transport = async (query, variables, signal) => {
     signal?.throwIfAborted();
     const token = await accessToken();
     const r = await fetch("https://api.linear.app/graphql", {
-      method: "POST",
+      method: "POST", cache: "no-store", credentials: "omit",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -148,7 +148,7 @@ export async function syncGraph(
     async (cursor) =>
       (
         await request(
-          "query SelectedTeamIssues($team:ID!,$cursor:String){issues(first:50,after:$cursor,includeArchived:true,filter:{team:{id:{eq:$team}}}){nodes{id identifier title description url archivedAt priority team{id} state{id name type} assignee{id name} project{id} projectMilestone{id} parent{id} updatedAt dueDate}pageInfo{hasNextPage endCursor}}}",
+          "query SelectedTeamIssues($team:ID!,$cursor:String){issues(first:50,after:$cursor,includeArchived:true,filter:{team:{id:{eq:$team}}}){nodes{id identifier title description url archivedAt priority team{id} state{id name type} assignee{id name} project{id} projectMilestone{id} parent{id} cycle{number} updatedAt dueDate}pageInfo{hasNextPage endCursor}}}",
           { team: teamId, cursor },
         )
       ).issues,
@@ -177,6 +177,7 @@ export async function syncGraph(
       assigneeId: i.assignee?.id,
       updatedAt: i.updatedAt,
       dueDate: i.dueDate,
+      cycleNumber: i.cycle?.number,
       status: i.state?.name,
       statusType: i.state?.type,
       assignee: i.assignee?.name,
@@ -259,6 +260,7 @@ export async function syncGraph(
   graph.members = metadata[0];
   graph.states = metadata[1];
   graph.labels = metadata[2];
+  const itemsById = new Map(graph.items.map(item => [item.id, item]));
   await boundedMap(
     issues,
     4,
@@ -272,7 +274,7 @@ export async function syncGraph(
             )
           ).labels,
       );
-      const item = graph.items.find((n) => n.id === i.id);
+      const item = itemsById.get(i.id);
       if (item) item.labels = labels.map((l) => l.id);
     },
     signal,
@@ -323,4 +325,14 @@ export async function discoverTeams(
         )
       ).teams,
   );
+}
+
+
+export async function discoverIdentity(transport: Transport = directTransport, signal?: AbortSignal) {
+  const data = await transport("query SessionIdentity { viewer { id organization { id } } }", {}, signal);
+  signal?.throwIfAborted();
+  const userId = data?.viewer?.id, workspaceId = data?.viewer?.organization?.id;
+  if (typeof userId !== "string" || !userId || typeof workspaceId !== "string" || !workspaceId)
+    throw new LinearAccessError("无法确认当前 Linear 账号与工作区，请重新连接。");
+  return { userId, workspaceId };
 }

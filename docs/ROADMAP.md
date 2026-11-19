@@ -20,3 +20,7 @@ Release decisions remain explicit: no Linear writes, no shared credentials, no n
 ## v0.3
 
 Implemented actionable overview counts, compact filters, current-state queue, grouped evidence, accessible modal navigation, cancelable layout and viewport controls. Added 200/800 performance fixtures, Chromium acceptance and manual Pages artifact validation. Outstanding: real marked round, real denied identity, physical device accessibility and public-origin callback, conditioned on explicit release approval.
+
+## v0.3.x
+
+v0.3.1 的源码门禁与账号分区进入候选阶段。后续按顺序取得保护预览、稳定回调、受限第二账号和正式域名验收记录。
