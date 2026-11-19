@@ -7,6 +7,7 @@ for (const width of [375, 390, 768, 1280, 1440]) {
       const button = name => page.getByRole("button", {name, exact:true});
       const activate = locator => width < 800 ? locator.tap() : locator.click();
       await page.goto("./");
+      await expect(page.locator("footer.app-footer")).toContainText("© 2026 Horace Chan");
       await activate(button("体验合成演示"));
       await expect(page.getByRole("region",{name:"项目索引"})).toHaveCount(0);
       await activate(button("项目探索"));
@@ -163,4 +164,21 @@ test("review queue finds In Review candidates independently of hierarchy search"
  await expect(queue.getByText(/In Review 候选/)).toBeVisible();
  await expect(queue.getByText("DEMO-12")).toBeVisible();
  await expect(queue.getByText(/尚未启用审阅规则/)).toBeVisible();
+});
+
+
+test("page footer shows the copyright holder and the actual MIT license", async ({page}) => {
+  await page.goto("./");
+  const footer = page.locator("footer.app-footer");
+  await expect(footer).toBeVisible();
+  await expect(footer).toContainText("© 2026 Horace Chan");
+  await expect(footer).toContainText("版权所有");
+  const license = footer.getByRole("link", {name:"MIT License"});
+  await expect(license).toHaveAttribute(
+    "href",
+    "https://github.com/HoraceCh/Linear-Gragh-Explorer/blob/main/LICENSE",
+  );
+  await expect(license).toHaveAttribute("rel", "noopener noreferrer");
+  await page.getByRole("button", {name:"体验合成演示"}).click();
+  await expect(footer).toContainText("© 2026 Horace Chan");
 });

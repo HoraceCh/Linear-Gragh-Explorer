@@ -704,6 +704,35 @@ footer span {
   gap: 6px;
   align-items: center;
 }
+.app-footer {
+  display: block;
+}
+.app-footer-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+.app-footer-legal {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.app-footer-legal a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.app-footer-legal a:hover {
+  text-decoration-thickness: 2px;
+}
+.app-footer-legal a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
 .filter-bar {
   display: flex;
   gap: 9px;
