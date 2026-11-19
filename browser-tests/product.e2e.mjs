@@ -164,3 +164,20 @@ test("review queue finds In Review candidates independently of hierarchy search"
  await expect(queue.getByText("DEMO-12")).toBeVisible();
  await expect(queue.getByText(/尚未启用审阅规则/)).toBeVisible();
 });
+
+
+test("page footer shows the copyright holder and the actual MIT license", async ({page}) => {
+  await page.goto("./");
+  const footer = page.locator("footer.app-footer");
+  await expect(footer).toBeVisible();
+  await expect(footer).toContainText("© 2026 Horace Chan");
+  await expect(footer).toContainText("版权所有");
+  const license = footer.getByRole("link", {name:"MIT License"});
+  await expect(license).toHaveAttribute(
+    "href",
+    "https://github.com/HoraceCh/Linear-Gragh-Explorer/blob/main/LICENSE",
+  );
+  await expect(license).toHaveAttribute("rel", "noopener noreferrer");
+  await page.getByRole("button", {name:"体验合成演示"}).click();
+  await expect(footer).toContainText("© 2026 Horace Chan");
+});
